@@ -40,18 +40,9 @@ pub mod linux_hypr;
 #[cfg(target_os = "linux")]
 pub use linux_hypr::HyprlandBackend as Backend;
 
-// Stubs for other OS
 #[cfg(target_os = "windows")]
-pub mod windows {
-    use super::*;
-    pub struct WindowsBackend;
-    impl CaptureBackend for WindowsBackend {
-        fn active_window(&self) -> Option<WindowInfo> { None }
-        fn capture(&self, _: Region, _: Option<&WindowInfo>) -> Result<RgbaImage, String> { Err("Not implemented".into()) }
-        fn running_apps(&self) -> Vec<AppEntry> { vec![] }
-        fn preflight(&self) -> Result<(), String> { Ok(()) }
-    }
-}
+pub mod windows;
+
 #[cfg(target_os = "windows")]
 pub use windows::WindowsBackend as Backend;
 
