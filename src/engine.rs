@@ -5,6 +5,7 @@ use crate::storage::save_image;
 use image::RgbaImage;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -12,19 +13,21 @@ use std::time::{Duration, Instant};
 pub struct Engine {
     config: Arc<Mutex<Config>>,
     backend: Backend,
+    pub capture_now: Arc<AtomicBool>,
 }
 
 impl Engine {
-    pub fn new(config: Arc<Mutex<Config>>) -> Self {
+    pub fn new(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) -> Self {
         Self {
             config,
             backend: Backend::new(),
+            capture_now,
         }
     }
 
     pub fn run(&mut self) {
         if let Err(e) = self.backend.preflight() {
-            eprintln!("Backend preflight failed: {}", e);
+            eprintln!("Backend preflight failed: {e}");
             return;
         }
 
@@ -36,8 +39,9 @@ impl Engine {
             thread::sleep(Duration::from_secs(1));
 
             let config = self.config.lock().unwrap().clone();
+            let force_capture = self.capture_now.swap(false, Ordering::Relaxed);
 
-            if config.paused {
+            if config.paused && !force_capture {
                 interval_running = false;
                 continue;
             }
@@ -53,76 +57,75 @@ impl Engine {
                 }
             });
 
-            if let Some(app_class) = matched_app {
+            // Determine if we should capture this tick
+            let should_attempt = if force_capture {
+                true
+            } else if let Some(_) = &matched_app {
                 if !interval_running {
-                    // Just switched to a matched app, reset timer
                     last_capture_time = Instant::now();
                     interval_running = true;
                 }
+                last_capture_time.elapsed().as_secs() >= config.interval_minutes * 60
+            } else {
+                interval_running = false;
+                false
+            };
 
-                let elapsed = last_capture_time.elapsed();
-                let interval_secs = config.interval_minutes * 60;
+            if !should_attempt {
+                continue;
+            }
 
-                if elapsed.as_secs() >= interval_secs {
-                    last_capture_time = Instant::now();
+            // Use matched_app or fall back to a generic name for forced captures
+            let app_name = matched_app.unwrap_or_else(|| "prntscrape".to_string());
+            last_capture_time = Instant::now();
 
-                    let region = match config.capture_region {
-                        crate::config::CaptureRegion::Window => Region::ActiveWindow,
-                        crate::config::CaptureRegion::Monitor => Region::Monitor,
-                    };
+            let region = match config.capture_region {
+                crate::config::CaptureRegion::Window => Region::ActiveWindow,
+                crate::config::CaptureRegion::Monitor => Region::Monitor,
+            };
 
-                    match self.backend.capture(region, active_window.as_ref()) {
-                        Ok(img) => {
-                            let mut should_save = true;
-
-                            if config.skip_unchanged {
-                                let hash = hash_image(&img);
-                                if Some(hash) == last_hash {
-                                    should_save = false;
-                                }
-                                last_hash = Some(hash);
-                            }
-
-                            if should_save {
-                                match config.mode {
-                                    Mode::Capture => {
-                                        let ext = match config.format {
-                                            Format::Png => "png",
-                                            Format::Jpeg => "jpg",
-                                        };
-                                        let path = generate_filepath(
-                                            &config.save_directory,
-                                            &app_class,
-                                            config.current_project.as_deref(),
-                                            ext,
-                                        );
-                                        if let Err(e) = save_image(&img, &path, &config.format, config.quality) {
-                                            eprintln!("Failed to save image: {}", e);
-                                        } else {
-                                            println!("Saved screenshot: {:?}", path);
-                                        }
-                                    }
-                                    Mode::Notify => {
-                                        // M4 notify mode
-                                        println!("Notify mode triggered (not yet implemented)");
-                                    }
-                                }
-                            }
+            match self.backend.capture(region, active_window.as_ref()) {
+                Ok(img) => {
+                    let mut do_save = true;
+                    if config.skip_unchanged && !force_capture {
+                        let hash = hash_image(&img);
+                        if Some(hash) == last_hash {
+                            do_save = false;
                         }
-                        Err(e) => {
-                            eprintln!("Capture failed: {}", e);
+                        last_hash = Some(hash);
+                    }
+
+                    if do_save {
+                        match config.mode {
+                            Mode::Capture => {
+                                let ext = match config.format {
+                                    Format::Png => "png",
+                                    Format::Jpeg => "jpg",
+                                };
+                                let path = generate_filepath(
+                                    &config.save_directory,
+                                    &app_name,
+                                    config.current_project.as_deref(),
+                                    ext,
+                                );
+                                match save_image(&img, &path, &config.format, config.quality) {
+                                    Ok(()) => println!("Saved: {:?}", path),
+                                    Err(e) => eprintln!("Save failed: {e}"),
+                                }
+                            }
+                            Mode::Notify => {
+                                println!("Notify mode: would send notification (not yet wired)");
+                            }
                         }
                     }
                 }
-            } else {
-                interval_running = false;
+                Err(e) => eprintln!("Capture error: {e}"),
             }
         }
     }
 }
 
 fn hash_image(img: &RgbaImage) -> u64 {
-    // Downscale to 16x16 to ignore minor noise/artifacts and compute hash quickly
     let small = image::imageops::resize(img, 16, 16, image::imageops::FilterType::Nearest);
     let mut hasher = DefaultHasher::new();
     small.pixels().for_each(|p| p.0.hash(&mut hasher));

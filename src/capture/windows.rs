@@ -1,7 +1,5 @@
 use super::{AppEntry, CaptureBackend, Region, WindowInfo};
-use image::{ImageBuffer, RgbaImage};
-use std::ffi::c_void;
-use windows::Win32::Foundation::HWND;
+use image::RgbaImage;
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 use xcap::{Monitor, Window};
 
@@ -16,32 +14,29 @@ impl WindowsBackend {
 impl CaptureBackend for WindowsBackend {
     fn active_window(&self) -> Option<WindowInfo> {
         let hwnd = unsafe { GetForegroundWindow() };
-        if hwnd.0 == 0 {
+        if hwnd.0.is_null() {
             return None;
         }
+        let hwnd_val = hwnd.0 as usize;
 
-        // Get the active window's process ID
-        let mut process_id = 0;
-        unsafe {
-            GetWindowThreadProcessId(hwnd, Some(&mut process_id));
-        }
+        let windows = Window::all().ok()?;
+        let active = windows.into_iter().find(|w| {
+            w.id().ok().map(|id| id as usize == hwnd_val).unwrap_or(false)
+        })?;
 
-        // xcap window matching doesn't expose HWND natively in an easy cross-platform way, 
-        // but we can match process_id if we get it, or we can just find the active one.
-        // xcap's Window struct has `id` which on Windows corresponds to the HWND as a u64.
-        
-        let windows = Window::all().unwrap_or_default();
-        let active_xcap = windows.into_iter().find(|w| w.id() as isize == hwnd.0 as isize)?;
-
-        let monitor_name = active_xcap.current_monitor().map(|m| m.name().to_string()).unwrap_or_default();
+        let monitor_name = active
+            .current_monitor()
+            .ok()
+            .and_then(|m| m.name().ok())
+            .unwrap_or_default();
 
         Some(WindowInfo {
-            app_class: active_xcap.app_name().to_string(), // xcap extracts the executable name
-            title: active_xcap.title().to_string(),
-            x: active_xcap.x(),
-            y: active_xcap.y(),
-            width: active_xcap.width(),
-            height: active_xcap.height(),
+            app_class: active.app_name().unwrap_or_default(),
+            title: active.title().unwrap_or_default(),
+            x: active.x().unwrap_or(0),
+            y: active.y().unwrap_or(0),
+            width: active.width().unwrap_or(0),
+            height: active.height().unwrap_or(0),
             monitor: monitor_name,
         })
     }
@@ -50,55 +45,43 @@ impl CaptureBackend for WindowsBackend {
         match region {
             Region::ActiveWindow => {
                 let hwnd = unsafe { GetForegroundWindow() };
-                if hwnd.0 == 0 {
+                if hwnd.0.is_null() {
                     return Err("No active window to capture".into());
                 }
-
+                let hwnd_val = hwnd.0 as usize;
                 let windows = Window::all().map_err(|e| e.to_string())?;
-                let win = windows.into_iter().find(|w| w.id() as isize == hwnd.0 as isize)
-                    .ok_or_else(|| "Could not find active window in xcap".to_string())?;
-
-                let capture = win.capture_image().map_err(|e| format!("Capture failed: {}", e))?;
-                Ok(capture)
+                let win = windows
+                    .into_iter()
+                    .find(|w| w.id().ok().map(|id| id as usize == hwnd_val).unwrap_or(false))
+                    .ok_or_else(|| "Active window not found in xcap".to_string())?;
+                win.capture_image().map_err(|e| format!("Capture failed: {e}"))
             }
             Region::Monitor => {
-                if let Some(win_info) = active_window {
-                    let monitors = Monitor::all().map_err(|e| e.to_string())?;
-                    let monitor = monitors.into_iter()
-                        .find(|m| m.name() == win_info.monitor)
-                        .unwrap_or_else(|| monitors.first().unwrap().clone());
-                    
-                    let capture = monitor.capture_image().map_err(|e| format!("Capture failed: {}", e))?;
-                    Ok(capture)
-                } else {
-                    // Fallback to primary monitor
-                    let monitors = Monitor::all().map_err(|e| e.to_string())?;
-                    if let Some(primary) = monitors.first() {
-                        let capture = primary.capture_image().map_err(|e| format!("Capture failed: {}", e))?;
-                        Ok(capture)
-                    } else {
-                        Err("No monitors found".into())
-                    }
-                }
+                let monitors = Monitor::all().map_err(|e| e.to_string())?;
+                let target_name = active_window.map(|w| w.monitor.as_str()).unwrap_or("");
+                let monitor = monitors
+                    .into_iter()
+                    .find(|m| m.name().ok().as_deref() == Some(target_name))
+                    .or_else(|| Monitor::all().ok().and_then(|ms| ms.into_iter().next()))
+                    .ok_or_else(|| "No monitors found".to_string())?;
+                monitor.capture_image().map_err(|e| format!("Capture failed: {e}"))
             }
         }
     }
 
     fn running_apps(&self) -> Vec<AppEntry> {
         let windows = Window::all().unwrap_or_default();
-        let mut apps: Vec<String> = windows.into_iter()
-            .map(|w| w.app_name().to_string())
-            .filter(|name| !name.is_empty())
+        let mut apps: Vec<String> = windows
+            .into_iter()
+            .filter_map(|w| w.app_name().ok())
+            .filter(|n| !n.is_empty())
             .collect();
-
         apps.sort();
         apps.dedup();
-
         apps.into_iter().map(|name| AppEntry { name, icon: None }).collect()
     }
 
     fn preflight(&self) -> Result<(), String> {
-        // No specific preflight needed for Windows xcap backend right now
         Ok(())
     }
 }
