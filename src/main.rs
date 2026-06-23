@@ -1,3 +1,9 @@
+// Suppress the console window on Windows release builds
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 mod capture;
 mod config;
 mod engine;

@@ -1,6 +1,8 @@
 //! Windows system tray + settings window.
+use crate::capture::CaptureBackend;
 use crate::config::{CaptureRegion, Config, Format, Mode};
 use eframe::egui::{self, ViewportBuilder, ViewportCommand};
+use notify_rust::Notification;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tray_icon::{
@@ -56,6 +58,40 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) {
         .with_menu_on_left_click(false)
         .build()
         .expect("tray icon create");
+
+    // ── Startup notification ──────────────────────────────────────────────────
+    {
+        let cfg = config.lock().unwrap();
+        let backend = crate::capture::Backend::new();
+        let running = backend.running_apps();
+        let matched: Vec<String> = running
+            .iter()
+            .filter(|a| {
+                let lower = a.name.to_lowercase();
+                cfg.watchlist.iter().any(|w| lower.contains(w.as_str()))
+            })
+            .map(|a| a.name.clone())
+            .collect();
+
+        let body = if matched.is_empty() {
+            format!(
+                "In {} min a screenshot will be taken when you open a watched app.",
+                cfg.interval_minutes
+            )
+        } else {
+            format!(
+                "Detected {}\nIn {} min a screenshot will be taken.",
+                matched.join(", "),
+                cfg.interval_minutes
+            )
+        };
+
+        let _ = Notification::new()
+            .summary("Prntscrape is up and running!")
+            .body(&body)
+            .app_id("Prntscrape")
+            .show();
+    }
 
     let ids = MenuIds {
         pause: pause_item.id().clone(),
