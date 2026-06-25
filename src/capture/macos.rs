@@ -76,51 +76,92 @@ impl MacosBackend {
 impl CaptureBackend for MacosBackend {
     fn active_window(&self) -> Option<WindowInfo> {
         let active_app = self.get_active_app_name()?;
-        
-        let windows = Window::all().ok()?;
+        let windows = match Window::all() {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("[Engine] Window::all() failed: {}", e);
+                return None;
+            }
+        };
+
+        if windows.is_empty() {
+            eprintln!("[Engine] Window::all() returned 0 windows. This usually indicates missing Screen Recording permission or that no windows are open.");
+        }
+
         let active = windows.into_iter().find(|w| {
             w.app_name().ok().as_deref() == Some(active_app.as_str())
-        })?;
+        });
 
-        let monitor_name = active
-            .current_monitor()
-            .ok()
-            .and_then(|m| m.name().ok())
-            .unwrap_or_default();
+        match active {
+            Some(win) => {
+                let monitor_name = win
+                    .current_monitor()
+                    .ok()
+                    .and_then(|m| m.name().ok())
+                    .unwrap_or_default();
 
-        Some(WindowInfo {
-            app_class: active.app_name().unwrap_or_default(),
-            title: active.title().unwrap_or_default(),
-            x: active.x().unwrap_or(0),
-            y: active.y().unwrap_or(0),
-            width: active.width().unwrap_or(0),
-            height: active.height().unwrap_or(0),
-            monitor: monitor_name,
-        })
+                Some(WindowInfo {
+                    app_class: win.app_name().unwrap_or_default(),
+                    title: win.title().unwrap_or_default(),
+                    x: win.x().unwrap_or(0),
+                    y: win.y().unwrap_or(0),
+                    width: win.width().unwrap_or(0),
+                    height: win.height().unwrap_or(0),
+                    monitor: monitor_name,
+                })
+            }
+            None => None,
+        }
     }
 
     fn capture(&self, region: Region, active_window: Option<&WindowInfo>) -> Result<RgbaImage, String> {
-        match region {
-            Region::ActiveWindow => {
-                let active_app = self.get_active_app_name().ok_or_else(|| "No active app found".to_string())?;
-                let windows = Window::all().map_err(|e| e.to_string())?;
-                let win = windows
-                    .into_iter()
-                    .find(|w| w.app_name().ok().as_deref() == Some(active_app.as_str()))
-                    .ok_or_else(|| format!("Active window for app {} not found in xcap", active_app))?;
-                win.capture_image().map_err(|e| format!("Capture failed: {e}"))
-            }
-            Region::Monitor => {
-                let monitors = Monitor::all().map_err(|e| e.to_string())?;
-                let target_name = active_window.map(|w| w.monitor.as_str()).unwrap_or("");
-                let monitor = monitors
-                    .into_iter()
-                    .find(|m| m.name().ok().as_deref() == Some(target_name))
-                    .or_else(|| Monitor::all().ok().and_then(|ms| ms.into_iter().next()))
-                    .ok_or_else(|| "No monitors found".to_string())?;
-                monitor.capture_image().map_err(|e| format!("Capture failed: {e}"))
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join(format!("prntscrape_temp_{}.png", std::process::id()));
+        
+        let mut cmd = Command::new("/usr/sbin/screencapture");
+        cmd.arg("-x"); // suppress shutter sound
+
+        let mut use_window_id = false;
+
+        if matches!(region, Region::ActiveWindow) {
+            if let Some(active_app) = self.get_active_app_name() {
+                if let Ok(windows) = Window::all() {
+                    if let Some(win) = windows.into_iter().find(|w| w.app_name().ok().as_deref() == Some(active_app.as_str())) {
+                        if let Ok(win_id) = win.id() {
+                            cmd.arg("-l").arg(win_id.to_string());
+                            use_window_id = true;
+                        }
+                    }
+                }
             }
         }
+
+        cmd.arg(&temp_file);
+
+        let output = cmd.output().map_err(|e| format!("Failed to execute screencapture: {e}"))?;
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            // If window capture failed, retry without window ID (capturing entire screen) as fallback
+            if use_window_id {
+                eprintln!("[Engine] Window-specific screencapture failed: {}. Retrying with full screen capture...", err);
+                let mut fallback_cmd = Command::new("/usr/sbin/screencapture");
+                fallback_cmd.arg("-x").arg(&temp_file);
+                let fb_output = fallback_cmd.output().map_err(|e| format!("Failed to execute fallback screencapture: {e}"))?;
+                if !fb_output.status.success() {
+                    let fb_err = String::from_utf8_lossy(&fb_output.stderr).trim().to_string();
+                    return Err(format!("screencapture failed: {}", fb_err));
+                }
+            } else {
+                return Err(format!("screencapture failed: {}", err));
+            }
+        }
+
+        let img = image::open(&temp_file)
+            .map_err(|e| format!("Failed to load captured image: {e}"))?
+            .to_rgba8();
+
+        let _ = std::fs::remove_file(&temp_file);
+        Ok(img)
     }
 
     fn running_apps(&self) -> Vec<AppEntry> {

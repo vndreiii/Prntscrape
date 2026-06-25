@@ -82,6 +82,12 @@ impl Engine {
                     interval_running = true;
                 }
                 last_capture_time.elapsed().as_secs() >= config.interval_secs
+            } else if self.test_mode {
+                if !interval_running {
+                    last_capture_time = Instant::now();
+                    interval_running = true;
+                }
+                last_capture_time.elapsed().as_secs() >= config.interval_secs
             } else {
                 interval_running = false;
                 false
@@ -91,7 +97,7 @@ impl Engine {
                 continue;
             }
 
-            // Use matched_app or fall back to a generic name for forced captures
+            // Use matched_app or fall back to a generic name for forced/test captures
             let app_name = matched_app.unwrap_or_else(|| "prntscrape".to_string());
             last_capture_time = Instant::now();
 
@@ -100,10 +106,23 @@ impl Engine {
                 crate::config::CaptureRegion::Monitor => Region::Monitor,
             };
 
-            match self.backend.capture(region, active_window.as_ref()) {
+            // In test mode, if capturing active window fails, fallback to monitor capture
+            let capture_result = match self.backend.capture(region, active_window.as_ref()) {
+                Ok(img) => Ok(img),
+                Err(e) => {
+                    if self.test_mode && matches!(region, Region::ActiveWindow) {
+                        println!("[Engine] Active window capture failed: {}. Falling back to Monitor capture...", e);
+                        self.backend.capture(Region::Monitor, None)
+                    } else {
+                        Err(e)
+                    }
+                }
+            };
+
+            match capture_result {
                 Ok(img) => {
                     let mut do_save = true;
-                    if config.skip_unchanged && !force_capture {
+                    if config.skip_unchanged && !force_capture && !self.test_mode {
                         let hash = hash_image(&img);
                         if Some(hash) == last_hash {
                             do_save = false;
