@@ -73,6 +73,12 @@ impl MacosBackend {
     }
 }
 
+fn is_app_match(window_app: &str, active_app: &str) -> bool {
+    let w_lower = window_app.to_lowercase();
+    let a_lower = active_app.to_lowercase();
+    w_lower == a_lower || w_lower.contains(&a_lower) || a_lower.contains(&w_lower)
+}
+
 impl CaptureBackend for MacosBackend {
     fn active_window(&self) -> Option<WindowInfo> {
         let active_app = self.get_active_app_name()?;
@@ -88,8 +94,8 @@ impl CaptureBackend for MacosBackend {
             eprintln!("[Engine] Window::all() returned 0 windows. This usually indicates missing Screen Recording permission or that no windows are open.");
         }
 
-        let active = windows.into_iter().find(|w| {
-            w.app_name().ok().as_deref() == Some(active_app.as_str())
+        let active = windows.iter().find(|w| {
+            w.app_name().ok().map(|name| is_app_match(&name, &active_app)).unwrap_or(false)
         });
 
         match active {
@@ -110,7 +116,17 @@ impl CaptureBackend for MacosBackend {
                     monitor: monitor_name,
                 })
             }
-            None => None,
+            None => {
+                let mut app_names: Vec<String> = windows
+                    .iter()
+                    .filter_map(|w| w.app_name().ok())
+                    .filter(|n| !n.is_empty())
+                    .collect();
+                app_names.sort();
+                app_names.dedup();
+                eprintln!("[Engine] Could not find window matching active app '{}'. Detected apps: {:?}", active_app, app_names);
+                None
+            }
         }
     }
 
@@ -126,7 +142,9 @@ impl CaptureBackend for MacosBackend {
         if matches!(region, Region::ActiveWindow) {
             if let Some(active_app) = self.get_active_app_name() {
                 if let Ok(windows) = Window::all() {
-                    if let Some(win) = windows.into_iter().find(|w| w.app_name().ok().as_deref() == Some(active_app.as_str())) {
+                    if let Some(win) = windows.iter().find(|w| {
+                        w.app_name().ok().map(|name| is_app_match(&name, &active_app)).unwrap_or(false)
+                    }) {
                         if let Ok(win_id) = win.id() {
                             cmd.arg("-l").arg(win_id.to_string());
                             use_window_id = true;
