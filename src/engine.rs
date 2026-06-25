@@ -34,6 +34,7 @@ impl Engine {
         let mut last_capture_time = Instant::now();
         let mut last_hash: Option<u64> = None;
         let mut interval_running = false;
+        let mut last_printed_app: Option<String> = None;
 
         loop {
             thread::sleep(Duration::from_secs(1));
@@ -47,6 +48,19 @@ impl Engine {
             }
 
             let active_window = self.backend.active_window();
+
+            let active_app_name = active_window.as_ref().map(|win| win.app_class.clone());
+            if active_app_name != last_printed_app {
+                match &active_window {
+                    Some(win) => {
+                        println!("[Engine] Active window: app_class='{}', title='{}'", win.app_class, win.title);
+                    }
+                    None => {
+                        println!("[Engine] Active window: None");
+                    }
+                }
+                last_printed_app = active_app_name;
+            }
 
             let matched_app = active_window.as_ref().and_then(|win| {
                 let class_lower = win.app_class.to_lowercase();

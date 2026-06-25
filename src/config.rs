@@ -86,9 +86,14 @@ impl Config {
         fs::write(config_path, content)
     }
 
-    fn config_path() -> PathBuf {
-        let proj_dirs = ProjectDirs::from("com", "prntscrape", "Prntscrape")
-            .expect("Could not find project directories");
-        proj_dirs.config_dir().join("config.json")
+    pub fn config_path() -> PathBuf {
+        if let Some(proj_dirs) = ProjectDirs::from("com", "prntscrape", "Prntscrape") {
+            proj_dirs.config_dir().join("config.json")
+        } else {
+            let home = directories::UserDirs::new()
+                .map(|u| u.home_dir().to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("."));
+            home.join(".prntscrape").join("config.json")
+        }
     }
 }
