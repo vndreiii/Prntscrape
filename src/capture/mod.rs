@@ -47,15 +47,7 @@ pub mod windows;
 pub use windows::WindowsBackend as Backend;
 
 #[cfg(target_os = "macos")]
-pub mod macos {
-    use super::*;
-    pub struct MacosBackend;
-    impl CaptureBackend for MacosBackend {
-        fn active_window(&self) -> Option<WindowInfo> { None }
-        fn capture(&self, _: Region, _: Option<&WindowInfo>) -> Result<RgbaImage, String> { Err("Not implemented".into()) }
-        fn running_apps(&self) -> Vec<AppEntry> { vec![] }
-        fn preflight(&self) -> Result<(), String> { Ok(()) }
-    }
-}
+pub mod macos;
+
 #[cfg(target_os = "macos")]
 pub use macos::MacosBackend as Backend;
