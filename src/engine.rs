@@ -120,7 +120,6 @@ impl Engine {
                                         "Working in {}. Click 'Capture Now' in settings to save your progress.",
                                         app_name
                                     ))
-                                    .app_id("Prntscrape")
                                     .show();
                             }
                         }
