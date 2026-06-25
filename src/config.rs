@@ -27,7 +27,7 @@ pub enum Format {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub mode: Mode,
-    pub interval_minutes: u64,
+    pub interval_secs: u64,
     pub capture_region: CaptureRegion,
     pub save_directory: String,
     pub current_project: Option<String>,
@@ -46,7 +46,7 @@ impl Default for Config {
 
         Self {
             mode: Mode::Capture,
-            interval_minutes: 2,
+            interval_secs: 120,
             capture_region: CaptureRegion::Window,
             save_directory,
             current_project: None,

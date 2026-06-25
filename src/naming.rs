@@ -19,11 +19,13 @@ pub fn generate_filepath(
         Some(proj) => {
             let proj_slug = slugify(proj);
             path.push(&proj_slug);
+            path.push(&date_str);
             let filename = format!("{}-{}-{}-{}.{}", proj_slug, app_slug, date_str, time_str, ext);
             path.push(filename);
         }
         None => {
             path.push(&app_slug);
+            path.push(&date_str);
             let filename = format!("{}-{}-{}.{}", app_slug, date_str, time_str, ext);
             path.push(filename);
         }

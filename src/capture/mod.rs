@@ -11,7 +11,7 @@ pub struct WindowInfo {
     pub monitor: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct AppEntry {
     pub name: String,
     pub icon: Option<Vec<u8>>,

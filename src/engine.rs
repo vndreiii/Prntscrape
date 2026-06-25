@@ -65,7 +65,7 @@ impl Engine {
                     last_capture_time = Instant::now();
                     interval_running = true;
                 }
-                last_capture_time.elapsed().as_secs() >= config.interval_minutes * 60
+                last_capture_time.elapsed().as_secs() >= config.interval_secs
             } else {
                 interval_running = false;
                 false
@@ -114,7 +114,14 @@ impl Engine {
                                 }
                             }
                             Mode::Notify => {
-                                println!("Notify mode: would send notification (not yet wired)");
+                                let _ = notify_rust::Notification::new()
+                                    .summary("Prntscrape Reminder")
+                                    .body(&format!(
+                                        "Working in {}. Click 'Capture Now' in settings to save your progress.",
+                                        app_name
+                                    ))
+                                    .app_id("Prntscrape")
+                                    .show();
                             }
                         }
                     }

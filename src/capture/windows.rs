@@ -1,6 +1,6 @@
 use super::{AppEntry, CaptureBackend, Region, WindowInfo};
 use image::RgbaImage;
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 use xcap::{Monitor, Window};
 
 pub struct WindowsBackend;
