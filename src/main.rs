@@ -6,7 +6,7 @@ mod engine;
 mod naming;
 mod storage;
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 mod ui;
 
 use std::sync::atomic::AtomicBool;
@@ -64,29 +64,7 @@ fn parse_args() -> Option<(config::Config, bool)> {
     Some((config, test_mode))
 }
 
-#[cfg(target_os = "windows")]
-fn main() {
-    let (config, test_mode) = match parse_args() {
-        Some(val) => val,
-        None => return,
-    };
-    let config_arc = Arc::new(Mutex::new(config));
-    let capture_now = Arc::new(AtomicBool::new(false));
-
-    // Spawn capture engine on a background thread
-    let eng_config = config_arc.clone();
-    let eng_capture = capture_now.clone();
-    std::thread::spawn(move || {
-        let mut engine = engine::Engine::new(eng_config, eng_capture);
-        engine.test_mode = test_mode;
-        engine.run();
-    });
-
-    // Run tray + settings window on the main thread (required by Win32)
-    ui::run(config_arc, capture_now);
-}
-
-#[cfg(not(target_os = "windows"))]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn main() {
     std::panic::set_hook(Box::new(|info| {
         eprintln!("\n❌ Prntscrape has crashed due to a panic!");
@@ -101,6 +79,56 @@ fn main() {
             eprintln!("Location: {}:{}:{}", location.file(), location.line(), location.column());
         }
         eprintln!("Please check your system permissions (Automation & Accessibility) and try again.");
+    }));
+
+    let (config, test_mode) = match parse_args() {
+        Some(val) => val,
+        None => return,
+    };
+    
+    println!("Starting Prntscrape...");
+    if test_mode {
+        println!("🚀 [Test Mode Enabled] Ignoring watchlist, capturing active window every {} seconds.", config.interval_secs);
+    }
+
+    let path = config::Config::config_path();
+    println!("Config loaded from: {}", path.to_string_lossy());
+    if !test_mode {
+        println!("Watching for applications: {:?}", config.watchlist);
+    }
+    println!("Save directory: {}", config.save_directory);
+
+    let config_arc = Arc::new(Mutex::new(config));
+    let capture_now = Arc::new(AtomicBool::new(false));
+
+    // Spawn capture engine on a background thread
+    let eng_config = config_arc.clone();
+    let eng_capture = capture_now.clone();
+    std::thread::spawn(move || {
+        let mut engine = engine::Engine::new(eng_config, eng_capture);
+        engine.test_mode = test_mode;
+        engine.run();
+    });
+
+    // Run tray + settings window on the main thread (required by Win32 and macOS AppKit)
+    ui::run(config_arc, capture_now);
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+fn main() {
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("\n❌ Prntscrape has crashed due to a panic!");
+        if let Some(s) = info.payload().downcast_ref::<&str>() {
+            eprintln!("Panic message: {s}");
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            eprintln!("Panic message: {s}");
+        } else {
+            eprintln!("Panic message: Unknown error");
+        }
+        if let Some(location) = info.location() {
+            eprintln!("Location: {}:{}:{}", location.file(), location.line(), location.column());
+        }
+        eprintln!("Please check your system permissions and try again.");
     }));
 
     let (config, test_mode) = match parse_args() {
