@@ -14,6 +14,7 @@ pub struct Engine {
     config: Arc<Mutex<Config>>,
     backend: Backend,
     pub capture_now: Arc<AtomicBool>,
+    pub test_mode: bool,
 }
 
 impl Engine {
@@ -22,6 +23,7 @@ impl Engine {
             config,
             backend: Backend::new(),
             capture_now,
+            test_mode: false,
         }
     }
 
@@ -64,7 +66,7 @@ impl Engine {
 
             let matched_app = active_window.as_ref().and_then(|win| {
                 let class_lower = win.app_class.to_lowercase();
-                if config.watchlist.iter().any(|w| class_lower.contains(&w.to_lowercase())) {
+                if self.test_mode || config.watchlist.iter().any(|w| class_lower.contains(&w.to_lowercase())) {
                     Some(win.app_class.clone())
                 } else {
                     None
