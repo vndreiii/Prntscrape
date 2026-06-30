@@ -312,6 +312,10 @@ window.onerror = function(message, source, lineno, colno, error) {
     window.ipc.postMessage(JSON.stringify({action: 'log_error', error: errText}));
   }
 };
+// Detect macOS to apply native styles
+if (navigator.userAgent.indexOf('Mac') !== -1 || navigator.platform.indexOf('Mac') !== -1) {
+  document.documentElement.classList.add('mac');
+}
 </script>
 <style>
 :root {
@@ -551,6 +555,84 @@ input[type=range]::-webkit-slider-thumb {
 /* ── Misc ── */
 #q-row { display: none; }
 #q-row.show { display: flex; }
+
+/* ── macOS Native Overrides ── */
+html.mac {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surf2: #e8e8ed;
+  --text: #1d1d1f;
+  --text2: #86868b;
+  --accent: #007aff;
+  --border: rgba(0,0,0,0.06);
+}
+@media (prefers-color-scheme: dark) {
+  html.mac {
+    --bg: #1e1e1e;
+    --surface: #2d2d2d;
+    --surf2: #3a3a3a;
+    --text: #f5f5f7;
+    --text2: #86868b;
+    --accent: #0a84ff;
+    --border: rgba(255,255,255,0.06);
+  }
+}
+html.mac body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+  letter-spacing: -0.1px;
+}
+html.mac .btn {
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+html.mac .btn-accent {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+@media (prefers-color-scheme: dark) {
+  html.mac .btn-accent { color: #fff; }
+}
+html.mac .card {
+  border-radius: 10px;
+}
+html.mac .seg {
+  border-radius: 6px;
+  background: rgba(120, 120, 128, 0.12);
+}
+html.mac .seg label {
+  border-radius: 4px;
+  font-weight: 500;
+}
+html.mac .seg input:checked + label {
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 1px rgba(0,0,0,0.06);
+}
+html.mac .tag {
+  border-radius: 6px;
+  background: var(--surf2);
+}
+html.mac .toggle .trk {
+  border-radius: 12px;
+  border: none;
+  background: rgba(120, 120, 128, 0.16);
+}
+html.mac .toggle input:checked ~ .trk {
+  background: #34c75 green; /* macOS native green */
+  background: #34c759;
+}
+html.mac .thmb {
+  width: 14px;
+  height: 14px;
+  top: 3px;
+  left: 3px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+html.mac .toggle input:checked ~ .trk .thmb {
+  transform: translateX(20px);
+}
 </style>
 </head>
 <body>
