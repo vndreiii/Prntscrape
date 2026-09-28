@@ -55,7 +55,10 @@ impl Engine {
             if active_app_name != last_printed_app {
                 match &active_window {
                     Some(win) => {
-                        println!("[Engine] Active window: app_class='{}', title='{}'", win.app_class, win.title);
+                        println!(
+                            "[Engine] Active window: app_class='{}', title='{}'",
+                            win.app_class, win.title
+                        );
                     }
                     None => {
                         println!("[Engine] Active window: None");
@@ -66,7 +69,12 @@ impl Engine {
 
             let matched_app = active_window.as_ref().and_then(|win| {
                 let class_lower = win.app_class.to_lowercase();
-                if self.test_mode || config.watchlist.iter().any(|w| class_lower.contains(&w.to_lowercase())) {
+                if self.test_mode
+                    || config
+                        .watchlist
+                        .iter()
+                        .any(|w| class_lower.contains(&w.to_lowercase()))
+                {
                     Some(win.app_class.clone())
                 } else {
                     None
@@ -111,7 +119,10 @@ impl Engine {
                 Ok(img) => Ok(img),
                 Err(e) => {
                     if self.test_mode && matches!(region, Region::ActiveWindow) {
-                        println!("[Engine] Active window capture failed: {}. Falling back to Monitor capture...", e);
+                        println!(
+                            "[Engine] Active window capture failed: {}. Falling back to Monitor capture...",
+                            e
+                        );
                         self.backend.capture(Region::Monitor, None)
                     } else {
                         Err(e)
@@ -131,7 +142,11 @@ impl Engine {
                     }
 
                     if do_save {
-                        match config.mode {
+                        match if force_capture {
+                            Mode::Capture
+                        } else {
+                            config.mode.clone()
+                        } {
                             Mode::Capture => {
                                 let ext = match config.format {
                                     Format::Png => "png",

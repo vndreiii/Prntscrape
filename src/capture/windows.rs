@@ -21,7 +21,10 @@ impl CaptureBackend for WindowsBackend {
 
         let windows = Window::all().ok()?;
         let active = windows.into_iter().find(|w| {
-            w.id().ok().map(|id| id as usize == hwnd_val).unwrap_or(false)
+            w.id()
+                .ok()
+                .map(|id| id as usize == hwnd_val)
+                .unwrap_or(false)
         })?;
 
         let monitor_name = active
@@ -41,7 +44,11 @@ impl CaptureBackend for WindowsBackend {
         })
     }
 
-    fn capture(&self, region: Region, active_window: Option<&WindowInfo>) -> Result<RgbaImage, String> {
+    fn capture(
+        &self,
+        region: Region,
+        active_window: Option<&WindowInfo>,
+    ) -> Result<RgbaImage, String> {
         match region {
             Region::ActiveWindow => {
                 let hwnd = unsafe { GetForegroundWindow() };
@@ -52,9 +59,15 @@ impl CaptureBackend for WindowsBackend {
                 let windows = Window::all().map_err(|e| e.to_string())?;
                 let win = windows
                     .into_iter()
-                    .find(|w| w.id().ok().map(|id| id as usize == hwnd_val).unwrap_or(false))
+                    .find(|w| {
+                        w.id()
+                            .ok()
+                            .map(|id| id as usize == hwnd_val)
+                            .unwrap_or(false)
+                    })
                     .ok_or_else(|| "Active window not found in xcap".to_string())?;
-                win.capture_image().map_err(|e| format!("Capture failed: {e}"))
+                win.capture_image()
+                    .map_err(|e| format!("Capture failed: {e}"))
             }
             Region::Monitor => {
                 let monitors = Monitor::all().map_err(|e| e.to_string())?;
@@ -64,7 +77,9 @@ impl CaptureBackend for WindowsBackend {
                     .find(|m| m.name().ok().as_deref() == Some(target_name))
                     .or_else(|| Monitor::all().ok().and_then(|ms| ms.into_iter().next()))
                     .ok_or_else(|| "No monitors found".to_string())?;
-                monitor.capture_image().map_err(|e| format!("Capture failed: {e}"))
+                monitor
+                    .capture_image()
+                    .map_err(|e| format!("Capture failed: {e}"))
             }
         }
     }
@@ -78,7 +93,9 @@ impl CaptureBackend for WindowsBackend {
             .collect();
         apps.sort();
         apps.dedup();
-        apps.into_iter().map(|name| AppEntry { name, icon: None }).collect()
+        apps.into_iter()
+            .map(|name| AppEntry { name, icon: None })
+            .collect()
     }
 
     fn preflight(&self) -> Result<(), String> {

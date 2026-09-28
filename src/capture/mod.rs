@@ -27,7 +27,11 @@ pub trait CaptureBackend {
     /// The currently focused window, if any.
     fn active_window(&self) -> Option<WindowInfo>;
     /// Capture the requested region as raw pixels.
-    fn capture(&self, region: Region, active_window: Option<&WindowInfo>) -> Result<RgbaImage, String>;
+    fn capture(
+        &self,
+        region: Region,
+        active_window: Option<&WindowInfo>,
+    ) -> Result<RgbaImage, String>;
     /// Distinct apps with open windows.
     fn running_apps(&self) -> Vec<AppEntry>;
     /// Verify prerequisites.

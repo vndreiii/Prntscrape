@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use directories::ProjectDirs;
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -25,6 +25,7 @@ pub enum Format {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
     pub mode: Mode,
     pub interval_secs: u64,
@@ -41,7 +42,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         let save_directory = directories::UserDirs::new()
-            .and_then(|d| d.picture_dir().map(|p| p.join("Prntscrape").to_string_lossy().into_owned()))
+            .and_then(|d| {
+                d.picture_dir()
+                    .map(|p| p.join("Prntscrape").to_string_lossy().into_owned())
+            })
             .unwrap_or_else(|| "~/Pictures/Prntscrape".to_string());
 
         Self {
@@ -55,15 +59,46 @@ impl Default for Config {
             skip_unchanged: true,
             paused: false,
             watchlist: vec![
-                "photoshop", "illustrator", "indesign", "premiere", "after effects",
-                "lightroom", "xd", "animate", "figma", "penpot", "blender", "krita",
-                "inkscape", "gimp", "affinity", "davinci resolve", "clip studio", "word"
-            ].into_iter().map(String::from).collect(),
+                "photoshop",
+                "illustrator",
+                "indesign",
+                "premiere",
+                "after effects",
+                "lightroom",
+                "xd",
+                "animate",
+                "figma",
+                "penpot",
+                "blender",
+                "krita",
+                "inkscape",
+                "gimp",
+                "affinity",
+                "davinci resolve",
+                "clip studio",
+                "word",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect(),
         }
     }
 }
 
 impl Config {
+    pub fn validate(&self) -> Result<(), String> {
+        if !(1..=86400).contains(&self.interval_secs) {
+            return Err("Interval must be between 1 and 86400 seconds.".into());
+        }
+        if !(1..=100).contains(&self.quality) {
+            return Err("JPEG quality must be between 1 and 100.".into());
+        }
+        if self.save_directory.trim().is_empty() {
+            return Err("Choose a save folder.".into());
+        }
+        Ok(())
+    }
+
     pub fn load_or_default() -> Self {
         let config_path = Self::config_path();
         if let Ok(content) = fs::read_to_string(&config_path) {
@@ -71,7 +106,7 @@ impl Config {
                 return config;
             }
         }
-        
+
         let default_config = Self::default();
         let _ = default_config.save();
         default_config

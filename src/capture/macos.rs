@@ -46,8 +46,12 @@ impl MacosBackend {
 
                     if should_print {
                         eprintln!("[Engine] osascript failed: {}", err_msg);
-                        eprintln!("[Engine] Hint: This usually means Terminal/iTerm lacks Automation or Accessibility permissions.");
-                        eprintln!("[Engine] Grant permission in System Settings -> Privacy & Security -> Automation.");
+                        eprintln!(
+                            "[Engine] Hint: This usually means Terminal/iTerm lacks Automation or Accessibility permissions."
+                        );
+                        eprintln!(
+                            "[Engine] Grant permission in System Settings -> Privacy & Security -> Automation."
+                        );
                     }
                 }
             }
@@ -91,11 +95,16 @@ impl CaptureBackend for MacosBackend {
         };
 
         if windows.is_empty() {
-            eprintln!("[Engine] Window::all() returned 0 windows. This usually indicates missing Screen Recording permission or that no windows are open.");
+            eprintln!(
+                "[Engine] Window::all() returned 0 windows. This usually indicates missing Screen Recording permission or that no windows are open."
+            );
         }
 
         let active = windows.iter().find(|w| {
-            w.app_name().ok().map(|name| is_app_match(&name, &active_app)).unwrap_or(false)
+            w.app_name()
+                .ok()
+                .map(|name| is_app_match(&name, &active_app))
+                .unwrap_or(false)
         });
 
         match active {
@@ -124,16 +133,23 @@ impl CaptureBackend for MacosBackend {
                     .collect();
                 app_names.sort();
                 app_names.dedup();
-                eprintln!("[Engine] Could not find window matching active app '{}'. Detected apps: {:?}", active_app, app_names);
+                eprintln!(
+                    "[Engine] Could not find window matching active app '{}'. Detected apps: {:?}",
+                    active_app, app_names
+                );
                 None
             }
         }
     }
 
-    fn capture(&self, region: Region, active_window: Option<&WindowInfo>) -> Result<RgbaImage, String> {
+    fn capture(
+        &self,
+        region: Region,
+        active_window: Option<&WindowInfo>,
+    ) -> Result<RgbaImage, String> {
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join(format!("prntscrape_temp_{}.png", std::process::id()));
-        
+
         let mut cmd = Command::new("/usr/sbin/screencapture");
         cmd.arg("-x"); // suppress shutter sound
 
@@ -143,7 +159,10 @@ impl CaptureBackend for MacosBackend {
             if let Some(active_app) = self.get_active_app_name() {
                 if let Ok(windows) = Window::all() {
                     if let Some(win) = windows.iter().find(|w| {
-                        w.app_name().ok().map(|name| is_app_match(&name, &active_app)).unwrap_or(false)
+                        w.app_name()
+                            .ok()
+                            .map(|name| is_app_match(&name, &active_app))
+                            .unwrap_or(false)
                     }) {
                         if let Ok(win_id) = win.id() {
                             cmd.arg("-l").arg(win_id.to_string());
@@ -156,17 +175,26 @@ impl CaptureBackend for MacosBackend {
 
         cmd.arg(&temp_file);
 
-        let output = cmd.output().map_err(|e| format!("Failed to execute screencapture: {e}"))?;
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to execute screencapture: {e}"))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
             // If window capture failed, retry without window ID (capturing entire screen) as fallback
             if use_window_id {
-                eprintln!("[Engine] Window-specific screencapture failed: {}. Retrying with full screen capture...", err);
+                eprintln!(
+                    "[Engine] Window-specific screencapture failed: {}. Retrying with full screen capture...",
+                    err
+                );
                 let mut fallback_cmd = Command::new("/usr/sbin/screencapture");
                 fallback_cmd.arg("-x").arg(&temp_file);
-                let fb_output = fallback_cmd.output().map_err(|e| format!("Failed to execute fallback screencapture: {e}"))?;
+                let fb_output = fallback_cmd
+                    .output()
+                    .map_err(|e| format!("Failed to execute fallback screencapture: {e}"))?;
                 if !fb_output.status.success() {
-                    let fb_err = String::from_utf8_lossy(&fb_output.stderr).trim().to_string();
+                    let fb_err = String::from_utf8_lossy(&fb_output.stderr)
+                        .trim()
+                        .to_string();
                     return Err(format!("screencapture failed: {}", fb_err));
                 }
             } else {
@@ -191,7 +219,9 @@ impl CaptureBackend for MacosBackend {
             .collect();
         apps.sort();
         apps.dedup();
-        apps.into_iter().map(|name| AppEntry { name, icon: None }).collect()
+        apps.into_iter()
+            .map(|name| AppEntry { name, icon: None })
+            .collect()
     }
 
     fn preflight(&self) -> Result<(), String> {

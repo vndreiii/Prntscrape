@@ -1,0 +1,6 @@
+:root { --accent: #3584e4; --bg: #f6f5f4; --surf2: #eeedeb; }
+body { font-family: Cantarell, Ubuntu, system-ui, sans-serif; }
+.card { border-radius: 12px; }
+.btn, .inp, .seg { border-radius: 7px; }
+.btn { padding: 7px 14px; }
+@media (prefers-color-scheme: dark) { :root { --bg: #242424; --surface: #303030; --surf2: #3b3b3b; --accent: #78aeed; } }

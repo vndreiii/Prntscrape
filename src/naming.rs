@@ -20,7 +20,10 @@ pub fn generate_filepath(
             let proj_slug = slugify(proj);
             path.push(&proj_slug);
             path.push(&date_str);
-            let filename = format!("{}-{}-{}-{}.{}", proj_slug, app_slug, date_str, time_str, ext);
+            let filename = format!(
+                "{}-{}-{}-{}.{}",
+                proj_slug, app_slug, date_str, time_str, ext
+            );
             path.push(filename);
         }
         None => {

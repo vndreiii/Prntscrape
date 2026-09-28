@@ -38,12 +38,12 @@ impl CaptureBackend for HyprlandBackend {
         }
 
         let win: HyprWindow = serde_json::from_slice(&output.stdout).ok()?;
-        
+
         let mon_output = Command::new("hyprctl")
             .args(["monitors", "-j"])
             .output()
             .ok()?;
-        
+
         let mut monitor_name = win.monitor.to_string();
         if mon_output.status.success() {
             if let Ok(monitors) = serde_json::from_slice::<Vec<HyprMonitor>>(&mon_output.stdout) {
@@ -64,9 +64,13 @@ impl CaptureBackend for HyprlandBackend {
         })
     }
 
-    fn capture(&self, region: Region, active_window: Option<&WindowInfo>) -> Result<RgbaImage, String> {
+    fn capture(
+        &self,
+        region: Region,
+        active_window: Option<&WindowInfo>,
+    ) -> Result<RgbaImage, String> {
         let mut cmd = Command::new("grim");
-        
+
         match region {
             Region::ActiveWindow => {
                 if let Some(win) = active_window {
@@ -86,15 +90,20 @@ impl CaptureBackend for HyprlandBackend {
         }
 
         cmd.args(["-t", "png", "-"]);
-        
-        let output = cmd.output().map_err(|e| format!("Failed to run grim: {}", e))?;
+
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to run grim: {}", e))?;
         if !output.status.success() {
-            return Err(format!("grim failed: {}", String::from_utf8_lossy(&output.stderr)));
+            return Err(format!(
+                "grim failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
 
         let img = image::load_from_memory_with_format(&output.stdout, image::ImageFormat::Png)
             .map_err(|e| format!("Failed to decode image: {}", e))?;
-        
+
         Ok(img.to_rgba8())
     }
 
@@ -113,13 +122,16 @@ impl CaptureBackend for HyprlandBackend {
         }
 
         if let Ok(clients) = serde_json::from_slice::<Vec<HyprWindow>>(&output.stdout) {
-            let mut apps = clients.into_iter()
+            let mut apps = clients
+                .into_iter()
                 .map(|c| c.class)
                 .filter(|c| !c.is_empty())
                 .collect::<Vec<_>>();
             apps.sort();
             apps.dedup();
-            apps.into_iter().map(|name| AppEntry { name, icon: None }).collect()
+            apps.into_iter()
+                .map(|name| AppEntry { name, icon: None })
+                .collect()
         } else {
             vec![]
         }
@@ -131,7 +143,7 @@ impl CaptureBackend for HyprlandBackend {
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
-            
+
         if !hypr_ok {
             return Err("Hyprland not detected or hyprctl not in PATH".into());
         }
@@ -139,9 +151,11 @@ impl CaptureBackend for HyprlandBackend {
         let grim_ok = Command::new("grim")
             .arg("-h")
             .output()
-            .map(|o| o.status.success()
+            .map(|o| {
+                o.status.success()
             // grim -h exits with 0 or 1 depending on version, just checking if we can execute it
-            || o.status.code() == Some(1))
+            || o.status.code() == Some(1)
+            })
             .unwrap_or(false);
 
         if !grim_ok {

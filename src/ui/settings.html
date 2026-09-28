@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prntscrape Settings</title>
+<style>/* SHARED_STYLE */
+/* PLATFORM_STYLE */</style>
+</head>
+<body>
+
+<div class="header"><h1>Prntscrape Settings</h1></div>
+
+<div class="scroll">
+
+  <p id="platform-help" class="hint"></p>
+  <p id="backend-error" class="hint error" hidden></p>
+
+  <div class="card">
+    <div class="row">
+      <div class="lbl"><div class="t">Mode</div></div>
+      <div class="ctrl">
+        <div class="seg">
+          <input type="radio" name="mode" id="m-cap" value="capture">
+          <label for="m-cap">Auto Capture</label>
+          <input type="radio" name="mode" id="m-not" value="notify">
+          <label for="m-not">Just Remind Me</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="lbl">
+        <div class="t">Interval</div>
+        <div class="s">How often to capture</div>
+      </div>
+      <div class="ctrl" style="flex-wrap:wrap;gap:6px">
+        <div class="pills">
+          <input type="radio" name="iv" id="iv30"  value="30" onchange="ivPreset(30)"><label  for="iv30">30s</label>
+          <input type="radio" name="iv" id="iv60"  value="60" onchange="ivPreset(60)"><label  for="iv60">1m</label>
+          <input type="radio" name="iv" id="iv120" value="120" onchange="ivPreset(120)"><label for="iv120">2m</label>
+          <input type="radio" name="iv" id="iv300" value="300" onchange="ivPreset(300)"><label for="iv300">5m</label>
+          <input type="radio" name="iv" id="iv600" value="600" onchange="ivPreset(600)"><label for="iv600">10m</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <input id="iv-custom" aria-label="Capture interval in seconds" class="inp" type="number" min="1" max="86400" style="width:90px" placeholder="sec" onchange="ivCustom()">
+          <span style="font-size:12px;color:var(--text2)">sec</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="lbl"><div class="t">Capture region</div></div>
+      <div class="ctrl">
+        <div class="seg">
+          <input type="radio" name="region" id="r-win" value="window">
+          <label for="r-win">Active Window</label>
+          <input type="radio" name="region" id="r-mon" value="monitor">
+          <label for="r-mon">Full Monitor</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="lbl"><div class="t">Save folder</div></div>
+      <div class="ctrl" style="flex:1;min-width:0">
+        <input id="savedir" aria-label="Save folder" class="inp" type="text" style="flex:1;min-width:0">
+        <button class="btn" onclick="sendIpc('browse',{})">Browse…</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="lbl">
+        <div class="t">Project name</div>
+        <div class="s">Blank = per-app folders</div>
+      </div>
+      <div class="ctrl">
+        <input id="project" class="inp" type="text" style="width:180px" placeholder="optional">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="lbl"><div class="t">Format</div></div>
+      <div class="ctrl">
+        <div class="seg">
+          <input type="radio" name="fmt" id="f-png"  value="png"  onchange="fmtChange()">
+          <label for="f-png">PNG</label>
+          <input type="radio" name="fmt" id="f-jpeg" value="jpeg" onchange="fmtChange()">
+          <label for="f-jpeg">JPEG</label>
+        </div>
+      </div>
+    </div>
+    <div class="row" id="q-row">
+      <div class="lbl"><div class="t">JPEG quality</div></div>
+      <div class="ctrl slider-row">
+        <input id="qual" type="range" min="50" max="100" value="80" oninput="qualChange(this)">
+        <span id="qval" class="qv">80</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="lbl">
+        <div class="t">Skip unchanged frames</div>
+        <div class="s">Don't save if screen hasn't changed</div>
+      </div>
+      <div class="ctrl">
+        <label class="toggle">
+          <input id="skip" type="checkbox" aria-label="Skip unchanged frames">
+          <div class="trk"><div class="thmb"></div></div>
+        </label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="lbl"><div class="t">Paused</div></div>
+      <div class="ctrl">
+        <label class="toggle">
+          <input id="paused" type="checkbox" aria-label="Pause capturing">
+          <div class="trk"><div class="thmb"></div></div>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="border-bottom:1px solid var(--border)">
+      <div class="lbl">
+        <div class="t">Watchlist</div>
+        <div class="s">Apps to watch for</div>
+      </div>
+    </div>
+    <div class="tags" id="tags"></div>
+    <div class="add-row">
+      <input id="new-e" class="inp" type="text" style="flex:1" placeholder="Add app name…">
+      <button class="btn btn-accent" onclick="addEntry()">Add</button>
+    </div>
+    <div id="running-apps-section" style="padding: 10px 14px 14px; border-top: 1px dashed var(--border);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 12px; font-weight: 600; color: var(--text2)">Currently Running Apps (click to add):</span>
+        <button class="btn" style="padding: 2px 8px; font-size: 11px;" onclick="sendIpc('refresh_running', {})">Refresh</button>
+      </div>
+      <div id="running-pills" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding: 2px 0;">
+        <!-- Running apps will be inserted here -->
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="lbl"><div class="t">Updates <span id="app-version"></span></div><div class="s">GitHub · vndreiii/Prntscrape</div></div>
+      <div class="ctrl">
+        <button id="check-updates" class="btn" onclick="sendIpc('check_updates',{})">Check for Updates</button>
+        <button id="restart" class="btn btn-accent" hidden onclick="sendIpc('restart',{})">Restart</button>
+      </div>
+    </div>
+    <p id="update-status" class="hint" role="status">Checking for updates…</p>
+  </div>
+</div>
+
+<div class="footer">
+  <span id="save-status" role="status"></span>
+  <button class="btn" onclick="sendIpc('quit',{})">Quit</button>
+  <button class="btn" onclick="sendIpc('capture_now',{})">Capture Now</button>
+  <button class="btn btn-accent" onclick="save()">Save Settings</button>
+</div>
+
+<script>/* SETTINGS_SCRIPT */</script>
+</body>
+</html>

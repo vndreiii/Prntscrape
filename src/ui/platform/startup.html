@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 14px "Segoe UI", sans-serif; color: #202020; background: #f8f8f8; border: 1px solid #cfcfcf; padding: 16px; }
+header { display: flex; align-items: center; justify-content: space-between; color: #666; font-size: 12px; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: transparent; }
+#close { font-size: 19px; padding: 0 6px; }
+#open { display: block; text-align: left; width: 100%; padding: 10px 0; }
+strong { display: block; font-size: 16px; margin-bottom: 7px; }
+@media (prefers-color-scheme: dark) { body { background: #292929; color: #fff; border-color: #454545; } header { color: #ccc; } }
+</style></head>
+<body>
+<header><span>● &nbsp; Prntscrape</span><button id="close" aria-label="Dismiss notification" onclick="window.ipc.postMessage('dismiss')">×</button></header>
+<button id="open" onclick="window.ipc.postMessage('settings')"><strong>{{STATUS}}</strong><span>Click here to enter settings.</span></button>
+</body></html>
