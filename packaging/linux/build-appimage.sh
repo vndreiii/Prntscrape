@@ -34,14 +34,14 @@ while IFS= read -r process; do
   webkit_exec_dir=$(dirname "$process")
   deploy_args+=(--executable "$process")
   webkit_count=$((webkit_count + 1))
-done < <(dpkg-query -L libwebkit2gtk-4.1-0 | awk '/\/WebKit(Web|Network|GPU)Process$/')
+done < <(dpkg-query -L libwebkit2gtk-4.1-0 libwebkit2gtk-4.1-0t64 2>/dev/null | awk '/\/WebKit(Web|Network|GPU)Process$/')
 [[ "$webkit_count" -ge 2 ]] || { echo 'WebKit helper processes were not found' >&2; exit 1; }
 while IFS= read -r bundle; do
   [[ -f "$bundle" ]] || continue
   mkdir -p "$app_dir$(dirname "$bundle")"
   cp -L "$bundle" "$app_dir$bundle"
   deploy_args+=(--library "$bundle")
-done < <(dpkg-query -L libwebkit2gtk-4.1-0 | awk '/\/libwebkit2gtkinjectedbundle\.so$/')
+done < <(dpkg-query -L libwebkit2gtk-4.1-0 libwebkit2gtk-4.1-0t64 2>/dev/null | awk '/\/libwebkit2gtkinjectedbundle\.so$/')
 
 # GIO loads TLS/proxy modules dynamically, so include them and their dependencies.
 for module in "$lib_dir"/gio/modules/*.so; do

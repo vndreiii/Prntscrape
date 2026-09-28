@@ -305,6 +305,12 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
                 window.set_visible(true);
                 window.set_minimized(false);
                 window.set_focus();
+                #[cfg(target_os = "windows")]
+                {
+                    let size = window.inner_size();
+                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.width, size.height + 1));
+                    window.set_inner_size(size);
+                }
                 if ready {
                     sync_config(&webview, &config, &pause, tray.as_ref());
                     send(&webview, "loadRunningApps", &Backend::new().running_apps());

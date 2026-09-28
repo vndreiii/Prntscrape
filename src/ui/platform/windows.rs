@@ -92,6 +92,9 @@ impl StartupPopup {
             })
             .build(&window)?;
         window.set_visible(true);
+        let size = window.inner_size();
+        window.set_inner_size(tao::dpi::PhysicalSize::new(size.width, size.height + 1));
+        window.set_inner_size(size);
         Ok(Self {
             _webview: webview,
             window,
