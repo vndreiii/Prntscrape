@@ -108,7 +108,7 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) {
     // Construct the event loop first: this initializes GTK/AppKit before menus.
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
-    let executable = std::env::current_exe().ok();
+    let executable = updater::launch_path().ok();
     let window = WindowBuilder::new()
         .with_title("Prntscrape Settings")
         .with_inner_size(LogicalSize::new(820.0, 720.0))
@@ -352,7 +352,7 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) {
                 });
             }
             Event::UserEvent(AppEvent::Update(status)) => {
-                updating = status.phase == "checking";
+                updating = matches!(status.phase, "checking" | "downloading" | "installing");
                 update_status = status;
                 if ready {
                     send(&webview, "loadUpdate", &update_status);
@@ -362,12 +362,7 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) {
                 let result = executable
                     .as_ref()
                     .ok_or_else(|| "Cannot locate the executable".to_string())
-                    .and_then(|path| {
-                        std::process::Command::new(path)
-                            .args(std::env::args_os().skip(1))
-                            .spawn()
-                            .map_err(|error| error.to_string())
-                    });
+                    .and_then(|path| updater::restart(path).map_err(|error| error.to_string()));
                 match result {
                     Ok(_) => *control_flow = ControlFlow::Exit,
                     Err(error) => {

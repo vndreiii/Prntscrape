@@ -1,6 +1,6 @@
 [package]
 name = "prntscrape"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 repository = "https://github.com/vndreiii/Prntscrape"
 
@@ -16,6 +16,9 @@ wry = "0.55"
 tao = "0.35"
 rfd = "0.14"
 self_update = { version = "0.41", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate", "rustls"] }
+tempfile = "3"
+self-replace = "1"
+sha2 = "0.10"
 
 [target.'cfg(any(target_os="windows", target_os="macos"))'.dependencies]
 xcap = "0.9.6"

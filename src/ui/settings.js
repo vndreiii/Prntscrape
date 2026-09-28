@@ -10,7 +10,7 @@ function showMessage(message) {
 
 function loadUpdate(status) {
   document.getElementById('update-status').textContent = status.message;
-  document.getElementById('check-updates').disabled = status.phase === 'checking' || status.phase === 'updated';
+  document.getElementById('check-updates').disabled = ['checking', 'downloading', 'installing', 'updated'].includes(status.phase);
   document.getElementById('restart').hidden = status.phase !== 'updated';
 }
 

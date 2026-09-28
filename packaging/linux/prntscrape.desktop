@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Prntscrape
+Comment=Automatic screenshots of your creative work
+Exec=prntscrape
+Icon=prntscrape
+Terminal=false
+Categories=Graphics;Utility;
+StartupWMClass=prntscrape

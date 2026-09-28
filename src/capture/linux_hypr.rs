@@ -5,6 +5,15 @@ use std::process::Command;
 
 pub struct HyprlandBackend;
 
+fn hyprctl() -> Command {
+    let mut command = Command::new("hyprctl");
+    // Hyprland's CLI belongs to the host; don't load older bundled C++ libraries.
+    if std::env::var_os("APPIMAGE").is_some() {
+        command.env_remove("LD_LIBRARY_PATH");
+    }
+    command
+}
+
 #[derive(Deserialize)]
 struct HyprWindow {
     class: String,
@@ -28,10 +37,7 @@ impl HyprlandBackend {
 
 impl CaptureBackend for HyprlandBackend {
     fn active_window(&self) -> Option<WindowInfo> {
-        let output = Command::new("hyprctl")
-            .args(["activewindow", "-j"])
-            .output()
-            .ok()?;
+        let output = hyprctl().args(["activewindow", "-j"]).output().ok()?;
 
         if !output.status.success() {
             return None;
@@ -39,10 +45,7 @@ impl CaptureBackend for HyprlandBackend {
 
         let win: HyprWindow = serde_json::from_slice(&output.stdout).ok()?;
 
-        let mon_output = Command::new("hyprctl")
-            .args(["monitors", "-j"])
-            .output()
-            .ok()?;
+        let mon_output = hyprctl().args(["monitors", "-j"]).output().ok()?;
 
         let mut monitor_name = win.monitor.to_string();
         if mon_output.status.success() {
@@ -108,7 +111,7 @@ impl CaptureBackend for HyprlandBackend {
     }
 
     fn running_apps(&self) -> Vec<AppEntry> {
-        let output = Command::new("hyprctl")
+        let output = hyprctl()
             .args(["clients", "-j"])
             .output()
             .unwrap_or_else(|_| std::process::Output {
@@ -138,7 +141,7 @@ impl CaptureBackend for HyprlandBackend {
     }
 
     fn preflight(&self) -> Result<(), String> {
-        let hypr_ok = Command::new("hyprctl")
+        let hypr_ok = hyprctl()
             .arg("version")
             .output()
             .map(|o| o.status.success())

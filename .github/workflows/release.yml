@@ -1,4 +1,4 @@
-name: Build and publish
+name: Build portable apps and publish
 
 on:
   push:
@@ -10,8 +10,12 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: portable-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  build:
     if: github.server_url == 'https://github.com'
     strategy:
       fail-fast: false
@@ -19,70 +23,116 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            archive: prntscrape-x86_64-pc-windows-msvc.zip
-            binary: prntscrape.exe
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            archive: prntscrape-x86_64-unknown-linux-gnu.tar.gz
-            binary: prntscrape
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive: prntscrape-aarch64-apple-darwin.tar.gz
-            binary: prntscrape
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            archive: prntscrape-x86_64-apple-darwin.tar.gz
-            binary: prntscrape
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux dependencies
+      - name: Install Linux build and bundling dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libdbus-1-dev pkg-config
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libdbus-1-dev pkg-config librsvg2-dev libgirepository1.0-dev patchelf file desktop-file-utils libfuse2t64 grim
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: ~/.cargo
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Validate release version
-        if: startsWith(github.ref, 'refs/tags/')
+          key: ${{ matrix.target }}
+      - name: Read and validate version
+        id: version
         shell: bash
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
-          test "$GITHUB_REF_NAME" = "v$version"
+          version=$(cargo metadata --locked --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            test "$GITHUB_REF_NAME" = "v$version"
+          fi
       - run: cargo test --release --locked --target ${{ matrix.target }}
       - run: cargo build --release --locked --target ${{ matrix.target }}
-      - name: Package Unix binary
-        if: runner.os != 'Windows'
-        shell: bash
-        run: tar -czf "${{ matrix.archive }}" -C "target/${{ matrix.target }}/release" "${{ matrix.binary }}"
-      - name: Package Windows binary
+      - name: Package Linux AppImage
+        if: runner.os == 'Linux'
+        run: bash packaging/linux/build-appimage.sh "${{ matrix.target }}"
+      - name: Package portable Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path "target/${{ matrix.target }}/release/${{ matrix.binary }}" -DestinationPath "${{ matrix.archive }}"
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/prntscrape.exe" "dist/Prntscrape-${{ matrix.target }}.exe"
+      - name: Package portable macOS app
+        if: runner.os == 'macOS'
+        run: bash packaging/macos/build-app.sh "${{ matrix.target }}" "${{ steps.version.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
-          path: ${{ matrix.archive }}
+          name: portable-${{ matrix.target }}
+          path: dist/*
           if-no-files-found: error
 
   publish:
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Read release version
+        id: version
+        run: |
+          python3 -c 'import tomllib; print("tag=v" + tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])' >> "$GITHUB_OUTPUT"
+      - name: Check whether this version is already published
+        id: check
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        with:
+          script: |
+            const releases = await github.paginate(github.rest.repos.listReleases, {...context.repo, per_page: 100});
+            const existing = releases.find(r => r.tag_name === process.env.RELEASE_TAG);
+            const publish = !existing || existing.draft;
+            core.setOutput('publish', String(publish));
+            if (!publish) core.notice(process.env.RELEASE_TAG + ' is already published. Increase Cargo.toml version for the next update.');
       - uses: actions/download-artifact@v4
+        if: steps.check.outputs.publish == 'true'
         with:
           path: release-assets
+          pattern: portable-*
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - name: Verify complete package set
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          test -s release-assets/Prntscrape-x86_64-unknown-linux-gnu.AppImage
+          test -s release-assets/Prntscrape-x86_64-pc-windows-msvc.exe
+          test -s release-assets/Prntscrape-aarch64-apple-darwin.app.zip
+          test -s release-assets/Prntscrape-x86_64-apple-darwin.app.zip
+          cd release-assets
+          sha256sum Prntscrape-* > SHA256SUMS
+      - name: Upload all packages to a draft release
+        if: steps.check.outputs.publish == 'true'
+        id: release
+        uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Prntscrape ${{ steps.version.outputs.tag }}
+          draft: true
+          body_path: packaging/RELEASE_NOTES.md
+          generate_release_notes: true
           files: release-assets/*
           fail_on_unmatched_files: true
-          generate_release_notes: true
+      - name: Publish the completed release
+        if: steps.check.outputs.publish == 'true'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              ...context.repo, release_id: Number(process.env.RELEASE_ID),
+              draft: false, prerelease: process.env.RELEASE_TAG.includes('-')
+            });
