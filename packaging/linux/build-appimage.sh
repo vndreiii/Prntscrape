@@ -29,10 +29,19 @@ deploy_args=(--appdir "$app_dir" --executable "$repo_dir/target/$target/release/
 webkit_count=0
 while IFS= read -r process; do
   [[ -x "$process" ]] || continue
+  mkdir -p "$app_dir$(dirname "$process")"
+  cp -L "$process" "$app_dir$process"
+  webkit_exec_dir=$(dirname "$process")
   deploy_args+=(--executable "$process")
   webkit_count=$((webkit_count + 1))
 done < <(dpkg-query -L libwebkit2gtk-4.1-0 | awk '/\/WebKit(Web|Network|GPU)Process$/')
 [[ "$webkit_count" -ge 2 ]] || { echo 'WebKit helper processes were not found' >&2; exit 1; }
+while IFS= read -r bundle; do
+  [[ -f "$bundle" ]] || continue
+  mkdir -p "$app_dir$(dirname "$bundle")"
+  cp -L "$bundle" "$app_dir$bundle"
+  deploy_args+=(--library "$bundle")
+done < <(dpkg-query -L libwebkit2gtk-4.1-0 | awk '/\/libwebkit2gtkinjectedbundle\.so$/')
 
 # GIO loads TLS/proxy modules dynamically, so include them and their dependencies.
 for module in "$lib_dir"/gio/modules/*.so; do
@@ -45,9 +54,15 @@ gio-querymodules "$app_dir/usr/lib/gio/modules"
 # Upstream GTK hook forces X11. Tao/Wry support native Wayland as well.
 sed -i '/^export GDK_BACKEND=x11/d' "$app_dir/apprun-hooks/linuxdeploy-plugin-gtk.sh"
 install -m 644 "$repo_dir/packaging/linux/webkit-hook.sh" "$app_dir/apprun-hooks/webkit.sh"
-"$tools_dir/linuxdeploy.AppImage" --appdir "$app_dir" --output appimage
+webkit_library=$(readlink -f "$app_dir/usr/lib/libwebkit2gtk-4.1.so.0")
+python3 "$repo_dir/packaging/linux/relocate-webkit.py" "$webkit_library" "$webkit_exec_dir"
+install -m 755 "$repo_dir/packaging/linux/AppRun" "$tools_dir/Prntscrape-AppRun"
+"$tools_dir/linuxdeploy.AppImage" --appdir "$app_dir" --custom-apprun "$tools_dir/Prntscrape-AppRun" --output appimage
 chmod +x "$OUTPUT"
 test -s "$OUTPUT"
 
 # Exercise the bundled executable without starting capture or needing a display.
 "$OUTPUT" --appimage-extract-and-run --help
+smoke_dir=$(mktemp -d)
+# Exits only after the WebKit process loads settings and completes the IPC handshake.
+XDG_CONFIG_HOME="$smoke_dir/config" XDG_CACHE_HOME="$smoke_dir/cache" timeout 60s xvfb-run -a "$OUTPUT" --appimage-extract-and-run --smoke-test

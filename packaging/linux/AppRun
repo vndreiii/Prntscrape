@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+export APPDIR="${APPDIR:-$(cd -- "$(dirname -- "$0")" && pwd)}"
+export PATH="$APPDIR/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+for hook in "$APPDIR"/apprun-hooks/*.sh; do
+  [[ -f "$hook" ]] && source "$hook"
+done
+# The bundled WebKit helper paths are relocated relative to this directory.
+cd "$APPDIR/usr"
+exec "$APPDIR/usr/bin/prntscrape" "$@"

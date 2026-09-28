@@ -12,10 +12,11 @@ mod ui;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-fn parse_args() -> Option<(config::Config, bool)> {
+fn parse_args() -> Option<(config::Config, bool, bool)> {
     let mut config = config::Config::load_or_default();
     let mut args = std::env::args().skip(1);
     let mut test_mode = false;
+    let mut smoke_test = false;
     let mut interval_overridden = false;
 
     while let Some(arg) = args.next() {
@@ -37,6 +38,10 @@ fn parse_args() -> Option<(config::Config, bool)> {
             "--test" | "-t" => {
                 test_mode = true;
             }
+            "--smoke-test" => {
+                smoke_test = true;
+                config.paused = true;
+            }
             "--help" | "-h" => {
                 println!("Prntscrape - Background screenshot capture utility");
                 println!();
@@ -51,6 +56,9 @@ fn parse_args() -> Option<(config::Config, bool)> {
                     "  -t, --test                Test mode: captures active window every tick (ignores watchlist)"
                 );
                 println!("  -h, --help                Show this help message");
+                println!(
+                    "      --smoke-test          Load settings and exit (no captures or updates)"
+                );
                 return None;
             }
             _ => {
@@ -65,7 +73,7 @@ fn parse_args() -> Option<(config::Config, bool)> {
         config.interval_secs = 2; // Default to 2 seconds in test mode
     }
 
-    Some((config, test_mode))
+    Some((config, test_mode, smoke_test))
 }
 
 fn main() {
@@ -91,7 +99,7 @@ fn main() {
         );
     }));
 
-    let (config, test_mode) = match parse_args() {
+    let (config, test_mode, smoke_test) = match parse_args() {
         Some(val) => val,
         None => return,
     };
@@ -117,12 +125,14 @@ fn main() {
     // Spawn capture engine on a background thread
     let eng_config = config_arc.clone();
     let eng_capture = capture_now.clone();
-    std::thread::spawn(move || {
-        let mut engine = engine::Engine::new(eng_config, eng_capture);
-        engine.test_mode = test_mode;
-        engine.run();
-    });
+    if !smoke_test {
+        std::thread::spawn(move || {
+            let mut engine = engine::Engine::new(eng_config, eng_capture);
+            engine.test_mode = test_mode;
+            engine.run();
+        });
+    }
 
     // Run tray + settings window on the main thread (required by Win32 and macOS AppKit)
-    ui::run(config_arc, capture_now);
+    ui::run(config_arc, capture_now, smoke_test);
 }

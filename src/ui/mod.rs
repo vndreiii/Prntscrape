@@ -104,7 +104,7 @@ fn persist(mut cfg: Config, config: &Arc<Mutex<Config>>) -> Result<(), String> {
     Ok(())
 }
 
-pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) {
+pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test: bool) {
     // Construct the event loop first: this initializes GTK/AppKit before menus.
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
@@ -230,14 +230,16 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) {
     let mut popup: Option<platform::StartupPopup> = None;
 
     let update_proxy = proxy.clone();
-    std::thread::spawn(move || {
-        loop {
-            if update_proxy.send_event(AppEvent::CheckUpdates).is_err() {
-                break;
+    if !smoke_test {
+        std::thread::spawn(move || {
+            loop {
+                if update_proxy.send_event(AppEvent::CheckUpdates).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_secs(6 * 60 * 60));
             }
-            std::thread::sleep(Duration::from_secs(6 * 60 * 60));
-        }
-    });
+        });
+    }
 
     event_loop.run(move |event, target, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -310,6 +312,11 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>) {
                 }
             }
             Event::UserEvent(AppEvent::Ready) => {
+                if smoke_test {
+                    println!("Settings WebView smoke test passed");
+                    *control_flow = ControlFlow::Exit;
+                    return;
+                }
                 ready = true;
                 sync_config(&webview, &config, &pause, tray.as_ref());
                 send(&webview, "loadUpdate", &update_status);
