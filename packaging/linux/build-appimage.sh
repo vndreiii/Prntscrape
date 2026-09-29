@@ -27,21 +27,21 @@ deploy_args=(--appdir "$app_dir" --executable "$repo_dir/target/$target/release/
 
 # WebKit spawns separate processes; ldd on the main app doesn't discover them.
 webkit_count=0
+declare -a webkit_processes
 for process in /usr/lib/*/webkit2gtk-4.1/WebKit*Process /usr/libexec/webkit2gtk-4.1/WebKit*Process /usr/lib/webkit2gtk-4.1/WebKit*Process; do
   [[ -x "$process" ]] || continue
   if [[ "$process" =~ /WebKit(Web|Network|GPU)Process$ ]]; then
-    mkdir -p "$app_dir$(dirname "$process")"
-    cp -L "$process" "$app_dir$process"
-    webkit_exec_dir=$(dirname "$process")
+    webkit_processes+=("$process")
     deploy_args+=(--executable "$process")
     webkit_count=$((webkit_count + 1))
   fi
 done
 [[ "$webkit_count" -ge 2 ]] || { echo 'WebKit helper processes were not found' >&2; exit 1; }
+
+declare -a webkit_bundles
 for bundle in /usr/lib/*/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so /usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so /usr/lib/*/webkit2gtk-4.1/libwebkit2gtkinjectedbundle.so /usr/lib/webkit2gtk-4.1/libwebkit2gtkinjectedbundle.so; do
   [[ -f "$bundle" ]] || continue
-  mkdir -p "$app_dir$(dirname "$bundle")"
-  cp -L "$bundle" "$app_dir$bundle"
+  webkit_bundles+=("$bundle")
   deploy_args+=(--library "$bundle")
 done
 # GIO loads TLS/proxy modules dynamically, so include them and their dependencies.
@@ -55,8 +55,25 @@ gio-querymodules "$app_dir/usr/lib/gio/modules"
 # Upstream GTK hook forces X11. Tao/Wry support native Wayland as well.
 sed -i '/^export GDK_BACKEND=x11/d' "$app_dir/apprun-hooks/linuxdeploy-plugin-gtk.sh"
 install -m 644 "$repo_dir/packaging/linux/webkit-hook.sh" "$app_dir/apprun-hooks/webkit.sh"
-webkit_library=$(readlink -f "$app_dir/usr/lib/libwebkit2gtk-4.1.so.0")
-if [[ -f "$webkit_library" ]]; then python3 "$repo_dir/packaging/linux/relocate-webkit.py" "$webkit_library" "$webkit_exec_dir"; else echo "Warning: $webkit_library not found"; fi
+
+# Create symlinks to the patched executables and libraries inside AppDir
+for process in "${webkit_processes[@]}"; do
+    process_dir="$app_dir$(dirname "$process")"
+    process_name=$(basename "$process")
+    mkdir -p "$process_dir"
+    # linuxdeploy moves them to /usr/bin
+    ln -sf "$(realpath -m --relative-to="$process_dir" "$app_dir/usr/bin/$process_name")" "$process_dir/$process_name"
+done
+for bundle in "${webkit_bundles[@]}"; do
+    bundle_dir="$app_dir$(dirname "$bundle")"
+    bundle_name=$(basename "$bundle")
+    mkdir -p "$bundle_dir"
+    # linuxdeploy moves them to /usr/lib
+    ln -sf "$(realpath -m --relative-to="$bundle_dir" "$app_dir/usr/lib/$bundle_name")" "$bundle_dir/$bundle_name"
+done
+
+webkit_library=$(readlink -f "$app_dir/usr/lib/libwebkit2gtk-4.1.so.0" || true)
+if [[ -n "$webkit_library" && -f "$webkit_library" ]]; then python3 "$repo_dir/packaging/linux/relocate-webkit.py" "$webkit_library"; else echo "Warning: libwebkit2gtk-4.1.so.0 not found"; fi
 install -m 755 "$repo_dir/packaging/linux/AppRun" "$tools_dir/Prntscrape-AppRun"
 "$tools_dir/linuxdeploy.AppImage" --appdir "$app_dir" --custom-apprun "$tools_dir/Prntscrape-AppRun" --output appimage
 chmod +x "$OUTPUT"
