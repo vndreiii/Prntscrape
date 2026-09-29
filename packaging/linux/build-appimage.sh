@@ -27,22 +27,23 @@ deploy_args=(--appdir "$app_dir" --executable "$repo_dir/target/$target/release/
 
 # WebKit spawns separate processes; ldd on the main app doesn't discover them.
 webkit_count=0
-while IFS= read -r process; do
+for process in /usr/lib/*/webkit2gtk-4.1/WebKit*Process /usr/libexec/webkit2gtk-4.1/WebKit*Process /usr/lib/webkit2gtk-4.1/WebKit*Process; do
   [[ -x "$process" ]] || continue
-  mkdir -p "$app_dir$(dirname "$process")"
-  cp -L "$process" "$app_dir$process"
-  webkit_exec_dir=$(dirname "$process")
-  deploy_args+=(--executable "$process")
-  webkit_count=$((webkit_count + 1))
-done < <(find /usr/lib -type f -name "WebKit*Process" | grep -E "/WebKit(Web|Network|GPU)Process$")
+  if [[ "$process" =~ /WebKit(Web|Network|GPU)Process$ ]]; then
+    mkdir -p "$app_dir$(dirname "$process")"
+    cp -L "$process" "$app_dir$process"
+    webkit_exec_dir=$(dirname "$process")
+    deploy_args+=(--executable "$process")
+    webkit_count=$((webkit_count + 1))
+  fi
+done
 [[ "$webkit_count" -ge 2 ]] || { echo 'WebKit helper processes were not found' >&2; exit 1; }
-while IFS= read -r bundle; do
+for bundle in /usr/lib/*/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so /usr/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so /usr/lib/*/webkit2gtk-4.1/libwebkit2gtkinjectedbundle.so /usr/lib/webkit2gtk-4.1/libwebkit2gtkinjectedbundle.so; do
   [[ -f "$bundle" ]] || continue
   mkdir -p "$app_dir$(dirname "$bundle")"
   cp -L "$bundle" "$app_dir$bundle"
   deploy_args+=(--library "$bundle")
-done < <(find /usr/lib -type f -name "libwebkit2gtkinjectedbundle.so")
-
+done
 # GIO loads TLS/proxy modules dynamically, so include them and their dependencies.
 for module in "$lib_dir"/gio/modules/*.so; do
   [[ -f "$module" ]] || continue
