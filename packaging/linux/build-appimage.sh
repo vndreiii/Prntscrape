@@ -66,4 +66,4 @@ test -s "$OUTPUT"
 "$OUTPUT" --appimage-extract-and-run --help
 smoke_dir=$(mktemp -d)
 # Exits only after the WebKit process loads settings and completes the IPC handshake.
-XDG_CONFIG_HOME="$smoke_dir/config" XDG_CACHE_HOME="$smoke_dir/cache" timeout 60s xvfb-run -a "$OUTPUT" --appimage-extract-and-run --smoke-test
+WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 XDG_CONFIG_HOME="$smoke_dir/config" XDG_CACHE_HOME="$smoke_dir/cache" timeout 60s xvfb-run -a "$OUTPUT" --appimage-extract-and-run --smoke-test
