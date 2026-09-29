@@ -56,7 +56,7 @@ gio-querymodules "$app_dir/usr/lib/gio/modules"
 sed -i '/^export GDK_BACKEND=x11/d' "$app_dir/apprun-hooks/linuxdeploy-plugin-gtk.sh"
 install -m 644 "$repo_dir/packaging/linux/webkit-hook.sh" "$app_dir/apprun-hooks/webkit.sh"
 webkit_library=$(readlink -f "$app_dir/usr/lib/libwebkit2gtk-4.1.so.0")
-python3 "$repo_dir/packaging/linux/relocate-webkit.py" "$webkit_library" "$webkit_exec_dir"
+if [[ -f "$webkit_library" ]]; then python3 "$repo_dir/packaging/linux/relocate-webkit.py" "$webkit_library" "$webkit_exec_dir"; else echo "Warning: $webkit_library not found"; fi
 install -m 755 "$repo_dir/packaging/linux/AppRun" "$tools_dir/Prntscrape-AppRun"
 "$tools_dir/linuxdeploy.AppImage" --appdir "$app_dir" --custom-apprun "$tools_dir/Prntscrape-AppRun" --output appimage
 chmod +x "$OUTPUT"
