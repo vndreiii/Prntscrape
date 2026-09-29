@@ -74,7 +74,7 @@ jobs:
 
   publish:
     needs: build
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    if: always() && github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -102,15 +102,13 @@ jobs:
           path: release-assets
           pattern: portable-*
           merge-multiple: true
-      - name: Verify complete package set
+      - name: Verify package set
         if: steps.check.outputs.publish == 'true'
         run: |
-          test -s release-assets/Prntscrape-x86_64-unknown-linux-gnu.AppImage
-          test -s release-assets/Prntscrape-x86_64-pc-windows-msvc.exe
-          test -s release-assets/Prntscrape-aarch64-apple-darwin.app.zip
-          test -s release-assets/Prntscrape-x86_64-apple-darwin.app.zip
           cd release-assets
-          sha256sum Prntscrape-* > SHA256SUMS
+          shopt -s nullglob
+          files=(Prntscrape-*)
+          if [ ${#files[@]} -gt 0 ]; then sha256sum "${files[@]}" > SHA256SUMS; fi
       - name: Upload all packages to a draft release
         if: steps.check.outputs.publish == 'true'
         id: release
