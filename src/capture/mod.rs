@@ -9,6 +9,8 @@ pub struct WindowInfo {
     pub width: u32,
     pub height: u32,
     pub monitor: String,
+    #[cfg(target_os = "windows")]
+    pub native_id: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

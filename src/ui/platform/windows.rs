@@ -39,7 +39,8 @@ impl StartupPopup {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let window = WindowBuilder::new()
             .with_title("Prntscrape")
-            .with_inner_size(LogicalSize::new(360.0, 144.0))
+            .with_window_icon(super::super::make_window_icon())
+            .with_inner_size(LogicalSize::new(380.0, 164.0))
             .with_decorations(false)
             .with_resizable(false)
             .with_always_on_top(true)
@@ -76,14 +77,21 @@ impl StartupPopup {
             (work.right - size.width as i32 - margin).max(work.left),
             (work.bottom - size.height as i32 - margin).max(work.top),
         ));
-        let html = include_str!("startup.html").replace(
-            "{{STATUS}}",
-            if paused {
-                "Prntscrape is paused"
-            } else {
-                "Prntscrape is working"
-            },
-        );
+        use base64::Engine as _;
+        let logo = base64::engine::general_purpose::STANDARD
+            .encode(include_bytes!("../../../assets/prntscrape-logo.png"));
+        let html = include_str!("startup.html")
+            .replace("{{STATUS}}", if paused { "Paused" } else { "Running" })
+            .replace(
+                "{{MESSAGE}}",
+                if paused {
+                    "Captures are paused. Resume from the tray when you’re ready."
+                } else {
+                    "Your approved apps are being saved in the background."
+                },
+            )
+            .replace("{{STATE_CLASS}}", if paused { "paused" } else { "running" })
+            .replace("{{LOGO_DATA}}", &format!("data:image/png;base64,{logo}"));
         let webview = WebViewBuilder::new()
             .with_html(&html)
             .with_background_color((248, 248, 248, 255))
@@ -92,6 +100,7 @@ impl StartupPopup {
                 let event = match request.body().as_str() {
                     "settings" => AppEvent::ShowSettings,
                     "dismiss" => AppEvent::DismissStartup,
+                    "ready" => AppEvent::StartupPopupReady,
                     _ => return,
                 };
                 let _ = proxy.send_event(event);

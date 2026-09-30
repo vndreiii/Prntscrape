@@ -1,4 +1,4 @@
-use crate::capture::{Backend, CaptureBackend, Region};
+use crate::capture::{Backend, CaptureBackend, Region, WindowInfo};
 use crate::config::{Config, Format, Mode};
 use crate::naming::generate_filepath;
 use crate::storage::save_image;
@@ -37,17 +37,13 @@ impl Engine {
         let mut last_hash: Option<u64> = None;
         let mut interval_running = false;
         let mut last_printed_app: Option<String> = None;
+        let mut last_active_window: Option<WindowInfo> = None;
 
         loop {
             thread::sleep(Duration::from_secs(1));
 
             let config = self.config.lock().unwrap().clone();
             let force_capture = self.capture_now.swap(false, Ordering::Relaxed);
-
-            if config.paused && !force_capture {
-                interval_running = false;
-                continue;
-            }
 
             let active_window = self.backend.active_window();
 
@@ -67,19 +63,52 @@ impl Engine {
                 last_printed_app = active_app_name;
             }
 
+            let app_is_prntscrape = active_window.as_ref().is_some_and(|win| {
+                win.app_class.to_lowercase().contains("prntscrape")
+                    || win.title.to_lowercase().contains("prntscrape")
+            });
             let matched_app = active_window.as_ref().and_then(|win| {
                 let class_lower = win.app_class.to_lowercase();
-                if self.test_mode
-                    || config
-                        .watchlist
-                        .iter()
-                        .any(|w| class_lower.contains(&w.to_lowercase()))
+                if !app_is_prntscrape
+                    && (self.test_mode
+                        || config
+                            .watchlist
+                            .iter()
+                            .any(|w| class_lower.contains(&w.to_lowercase())))
                 {
                     Some(win.app_class.clone())
                 } else {
                     None
                 }
             });
+
+            if !app_is_prntscrape {
+                if let Some(active_window) = &active_window {
+                    last_active_window = Some(active_window.clone());
+                }
+            }
+            if config.paused && !force_capture {
+                interval_running = false;
+                continue;
+            }
+
+            let capture_window = if force_capture && (app_is_prntscrape || active_window.is_none())
+            {
+                last_active_window.as_ref().and_then(|window| {
+                    (self.test_mode
+                        || config.watchlist.iter().any(|allowed| {
+                            window
+                                .app_class
+                                .to_lowercase()
+                                .contains(&allowed.to_lowercase())
+                        }))
+                    .then(|| window.clone())
+                })
+            } else if matched_app.is_some() || self.test_mode {
+                active_window.clone()
+            } else {
+                None
+            };
 
             // Determine if we should capture this tick
             let should_attempt = if force_capture {
@@ -106,7 +135,14 @@ impl Engine {
             }
 
             // Use matched_app or fall back to a generic name for forced/test captures
-            let app_name = matched_app.unwrap_or_else(|| "prntscrape".to_string());
+            if force_capture && capture_window.is_none() {
+                eprintln!("Capture skipped: the last active app is not on the approved watchlist");
+                continue;
+            }
+            let app_name = capture_window
+                .as_ref()
+                .map(|window| window.app_class.clone())
+                .unwrap_or_else(|| "prntscrape".to_string());
             last_capture_time = Instant::now();
 
             let region = match config.capture_region {
@@ -115,7 +151,7 @@ impl Engine {
             };
 
             // In test mode, if capturing active window fails, fallback to monitor capture
-            let capture_result = match self.backend.capture(region, active_window.as_ref()) {
+            let capture_result = match self.backend.capture(region, capture_window.as_ref()) {
                 Ok(img) => Ok(img),
                 Err(e) => {
                     if self.test_mode && matches!(region, Region::ActiveWindow) {
@@ -123,7 +159,8 @@ impl Engine {
                             "[Engine] Active window capture failed: {}. Falling back to Monitor capture...",
                             e
                         );
-                        self.backend.capture(Region::Monitor, None)
+                        self.backend
+                            .capture(Region::Monitor, capture_window.as_ref())
                     } else {
                         Err(e)
                     }

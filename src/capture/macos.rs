@@ -156,7 +156,10 @@ impl CaptureBackend for MacosBackend {
         let mut use_window_id = false;
 
         if matches!(region, Region::ActiveWindow) {
-            if let Some(active_app) = self.get_active_app_name() {
+            let active_app = active_window
+                .map(|window| window.app_class.clone())
+                .or_else(|| self.get_active_app_name());
+            if let Some(active_app) = active_app.as_deref() {
                 if let Ok(windows) = Window::all() {
                     if let Some(win) = windows.iter().find(|w| {
                         w.app_name()

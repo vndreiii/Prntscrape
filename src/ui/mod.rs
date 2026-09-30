@@ -17,7 +17,7 @@ use tao::{
     dpi::LogicalSize,
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder},
-    window::WindowBuilder,
+    window::{Icon as WindowIcon, WindowBuilder},
 };
 use tray_icon::{
     MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
@@ -41,25 +41,36 @@ pub(super) enum AppEvent {
     Restart,
     #[cfg(target_os = "windows")]
     DismissStartup,
+    #[cfg(target_os = "windows")]
+    StartupPopupReady,
 }
 
 fn make_icon() -> tray_icon::Icon {
-    let mut rgba = vec![0; 32 * 32 * 4];
-    for (i, pixel) in rgba.chunks_exact_mut(4).enumerate() {
-        let x = (i % 32) as i32 - 16;
-        let y = (i / 32) as i32 - 16;
-        if x * x + y * y < 196 {
-            pixel.copy_from_slice(&[0, 120, 215, 255]);
-        }
-    }
+    let rgba = image::load_from_memory(include_bytes!("../../assets/prntscrape-logo.png"))
+        .expect("embedded app logo")
+        .resize_exact(32, 32, image::imageops::FilterType::Lanczos3)
+        .into_rgba8()
+        .into_raw();
     tray_icon::Icon::from_rgba(rgba, 32, 32).expect("tray icon")
 }
 
+pub(super) fn make_window_icon() -> Option<WindowIcon> {
+    let rgba = image::load_from_memory(include_bytes!("../../assets/prntscrape-logo.png"))
+        .ok()?
+        .resize_exact(32, 32, image::imageops::FilterType::Lanczos3)
+        .into_rgba8();
+    WindowIcon::from_rgba(rgba.as_raw().clone(), 32, 32).ok()
+}
+
 fn settings_html() -> String {
+    use base64::Engine as _;
+    let logo = base64::engine::general_purpose::STANDARD
+        .encode(include_bytes!("../../assets/prntscrape-logo.png"));
     include_str!("settings.html")
         .replace("/* SHARED_STYLE */", include_str!("settings.css"))
         .replace("/* PLATFORM_STYLE */", platform::STYLE)
         .replace("/* SETTINGS_SCRIPT */", include_str!("settings.js"))
+        .replace("{{LOGO_DATA}}", &format!("data:image/png;base64,{logo}"))
 }
 
 fn send(webview: &WebView, function: &str, value: &impl serde::Serialize) {
@@ -111,6 +122,7 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
     let executable = updater::launch_path().ok();
     let window = WindowBuilder::new()
         .with_title("Prntscrape Settings")
+        .with_window_icon(make_window_icon())
         .with_inner_size(LogicalSize::new(820.0, 720.0))
         .with_min_inner_size(LogicalSize::new(560.0, 480.0))
         .with_visible(platform::SHOW_ON_START)
@@ -227,6 +239,8 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
     let mut ready = false;
     #[cfg(target_os = "windows")]
     let mut popup: Option<platform::StartupPopup> = None;
+    #[cfg(target_os = "windows")]
+    let mut startup_popup_ready = false;
 
     let update_proxy = proxy.clone();
     if !smoke_test {
@@ -296,6 +310,15 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
             Event::UserEvent(AppEvent::DismissStartup) => {
                 popup = None;
             }
+            #[cfg(target_os = "windows")]
+            Event::UserEvent(AppEvent::StartupPopupReady) => {
+                startup_popup_ready = true;
+                if smoke_test && ready {
+                    println!("Windows Settings and startup popup smoke test passed");
+                    *control_flow = ControlFlow::Exit;
+                    return;
+                }
+            }
             Event::UserEvent(AppEvent::ShowSettings) => {
                 #[cfg(target_os = "windows")]
                 {
@@ -317,12 +340,20 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
                 }
             }
             Event::UserEvent(AppEvent::Ready) => {
+                ready = true;
                 if smoke_test {
-                    println!("Settings WebView smoke test passed");
-                    *control_flow = ControlFlow::Exit;
+                    #[cfg(target_os = "windows")]
+                    if startup_popup_ready {
+                        println!("Windows Settings and startup popup smoke test passed");
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        println!("Settings WebView smoke test passed");
+                        *control_flow = ControlFlow::Exit;
+                    }
                     return;
                 }
-                ready = true;
                 sync_config(&webview, &config, &pause, tray.as_ref());
                 send(&webview, "loadUpdate", &update_status);
             }

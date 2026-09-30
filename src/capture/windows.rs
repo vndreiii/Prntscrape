@@ -41,6 +41,7 @@ impl CaptureBackend for WindowsBackend {
             width: active.width().unwrap_or(0),
             height: active.height().unwrap_or(0),
             monitor: monitor_name,
+            native_id: hwnd_val,
         })
     }
 
@@ -51,11 +52,14 @@ impl CaptureBackend for WindowsBackend {
     ) -> Result<RgbaImage, String> {
         match region {
             Region::ActiveWindow => {
-                let hwnd = unsafe { GetForegroundWindow() };
-                if hwnd.0.is_null() {
-                    return Err("No active window to capture".into());
-                }
-                let hwnd_val = hwnd.0 as usize;
+                let hwnd_val = active_window
+                    .map(|window| window.native_id)
+                    .filter(|id| *id != 0)
+                    .or_else(|| {
+                        let hwnd = unsafe { GetForegroundWindow() };
+                        (!hwnd.0.is_null()).then_some(hwnd.0 as usize)
+                    })
+                    .ok_or_else(|| "No active window to capture".to_string())?;
                 let windows = Window::all().map_err(|e| e.to_string())?;
                 let win = windows
                     .into_iter()
