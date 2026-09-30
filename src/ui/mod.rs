@@ -196,7 +196,6 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
         .with_html(settings_html())
         .with_devtools(cfg!(debug_assertions))
         .with_initialization_script(&script)
-        .with_navigation_handler(|url| url == "about:blank")
         .with_ipc_handler(move |request| {
             let Ok(msg) = serde_json::from_str::<serde_json::Value>(request.body()) else {
                 return;

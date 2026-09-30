@@ -20,7 +20,10 @@ pub const HELP: &str = "Prntscrape runs in the background. Click the tray icon t
 pub fn build_webview(builder: WebViewBuilder<'_>, window: &Window) -> wry::Result<WebView> {
     // Some Windows GPU/driver combinations leave WebView2 surfaces black.
     // The UI is lightweight, so software rendering is preferable to an empty window.
-    builder.with_additional_browser_args("--disable-gpu").build(window)
+    builder
+        .with_background_color((243, 243, 243, 255))
+        .with_additional_browser_args("--disable-gpu")
+        .build(window)
 }
 
 pub struct StartupPopup {
@@ -83,8 +86,8 @@ impl StartupPopup {
         );
         let webview = WebViewBuilder::new()
             .with_html(&html)
+            .with_background_color((248, 248, 248, 255))
             .with_additional_browser_args("--disable-gpu")
-            .with_navigation_handler(|url| url == "about:blank")
             .with_ipc_handler(move |request| {
                 let event = match request.body().as_str() {
                     "settings" => AppEvent::ShowSettings,

@@ -63,6 +63,22 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/prntscrape.exe" "dist/Prntscrape-${{ matrix.target }}.exe"
+      - name: Smoke test Windows WebView
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = "dist/Prntscrape-${{ matrix.target }}.exe"
+          $stdout = Join-Path $env:RUNNER_TEMP "prntscrape-smoke.stdout"
+          $stderr = Join-Path $env:RUNNER_TEMP "prntscrape-smoke.stderr"
+          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $process.WaitForExit(60000)) {
+            $process.Kill()
+            Get-Content $stderr
+            throw "Windows WebView did not finish loading within 60 seconds."
+          }
+          Get-Content $stdout
+          Get-Content $stderr
+          if ($process.ExitCode -ne 0) { throw "Windows WebView smoke test exited with $($process.ExitCode)." }
       - name: Package portable macOS app
         if: runner.os == 'macOS'
         run: bash packaging/macos/build-app.sh "${{ matrix.target }}" "${{ steps.version.outputs.version }}"
