@@ -79,7 +79,8 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Windows WebView smoke test exited with $($process.ExitCode)." }
           # WebView2 writes its browser profile beside the executable. It is
           # created by the smoke test and must not be included in the release.
-          Remove-Item -LiteralPath "$exe.WebView2" -Recurse -Force -ErrorAction SilentlyContinue
+          $webviewProfile = "${exe}.WebView2"
+          Remove-Item -LiteralPath $webviewProfile -Recurse -Force -ErrorAction SilentlyContinue
       - name: Package portable macOS app
         if: runner.os == 'macOS'
         run: bash packaging/macos/build-app.sh "${{ matrix.target }}" "${{ steps.version.outputs.version }}"
