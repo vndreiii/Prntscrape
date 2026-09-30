@@ -56,20 +56,19 @@ gio-querymodules "$app_dir/usr/lib/gio/modules"
 sed -i '/^export GDK_BACKEND=x11/d' "$app_dir/apprun-hooks/linuxdeploy-plugin-gtk.sh"
 install -m 644 "$repo_dir/packaging/linux/webkit-hook.sh" "$app_dir/apprun-hooks/webkit.sh"
 
-# Create symlinks to the patched executables and libraries inside AppDir
+# WebKit resolves these helper paths relative to AppDir/usr. Keep real files at
+# those paths: linuxdeploy's later AppRun/AppImage pass can rewrite symlinks.
 for process in "${webkit_processes[@]}"; do
     process_dir="$app_dir$(dirname "$process")"
     process_name=$(basename "$process")
     mkdir -p "$process_dir"
-    # linuxdeploy moves them to /usr/bin
-    ln -sf "$(realpath -m --relative-to="$process_dir" "$app_dir/usr/bin/$process_name")" "$process_dir/$process_name"
+    install -m 755 "$app_dir/usr/bin/$process_name" "$process_dir/$process_name"
 done
 for bundle in "${webkit_bundles[@]}"; do
     bundle_dir="$app_dir$(dirname "$bundle")"
     bundle_name=$(basename "$bundle")
     mkdir -p "$bundle_dir"
-    # linuxdeploy moves them to /usr/lib
-    ln -sf "$(realpath -m --relative-to="$bundle_dir" "$app_dir/usr/lib/$bundle_name")" "$bundle_dir/$bundle_name"
+    install -m 644 "$app_dir/usr/lib/$bundle_name" "$bundle_dir/$bundle_name"
 done
 
 webkit_library=$(readlink -f "$app_dir/usr/lib/libwebkit2gtk-4.1.so.0" || true)

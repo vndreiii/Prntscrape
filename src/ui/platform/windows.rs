@@ -11,14 +11,16 @@ use windows::Win32::{
         SPI_GETWORKAREA, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
     },
 };
-use wry::{WebView, WebViewBuilder};
+use wry::{WebView, WebViewBuilder, WebViewBuilderExtWindows};
 
 pub const STYLE: &str = include_str!("windows.css");
 pub const SHOW_ON_START: bool = false;
 pub const HELP: &str = "Prntscrape runs in the background. Click the tray icon to open settings.";
 
 pub fn build_webview(builder: WebViewBuilder<'_>, window: &Window) -> wry::Result<WebView> {
-    builder.build(window)
+    // Some Windows GPU/driver combinations leave WebView2 surfaces black.
+    // The UI is lightweight, so software rendering is preferable to an empty window.
+    builder.with_additional_browser_args("--disable-gpu").build(window)
 }
 
 pub struct StartupPopup {
@@ -81,6 +83,7 @@ impl StartupPopup {
         );
         let webview = WebViewBuilder::new()
             .with_html(&html)
+            .with_additional_browser_args("--disable-gpu")
             .with_navigation_handler(|url| url == "about:blank")
             .with_ipc_handler(move |request| {
                 let event = match request.body().as_str() {
