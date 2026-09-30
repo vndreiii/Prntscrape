@@ -146,7 +146,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn packaged_assets_match_release_validation() {
+    fn release_workflow_supports_partial_packages() {
         let workflow = include_str!("../.github/workflows/release.yml");
         for target in [
             "x86_64-pc-windows-msvc",
@@ -154,9 +154,11 @@ mod tests {
             "aarch64-apple-darwin",
             "x86_64-apple-darwin",
         ] {
-            let name = asset_name(target).unwrap();
-            assert!(workflow.contains(&format!("test -s release-assets/{name}")));
+            assert!(asset_name(target).is_some());
         }
+        assert!(workflow.contains("files=(Prntscrape-*)"));
+        assert!(workflow.contains("sha256sum \"${files[@]}\" > SHA256SUMS"));
+        assert!(workflow.contains("steps.packages.outputs.available == 'true'"));
         assert!(asset_name("unsupported-target").is_none());
     }
 
