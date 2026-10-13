@@ -156,7 +156,8 @@ mod tests {
         ] {
             assert!(asset_name(target).is_some());
         }
-        assert!(workflow.contains("files=(Prntscrape-*)"));
+        assert!(workflow.contains("for package in Prntscrape-*; do"));
+        assert!(workflow.contains("[[ -f \"$package\" ]] && files+=(\"$package\")"));
         assert!(workflow.contains("sha256sum \"${files[@]}\" > SHA256SUMS"));
         assert!(workflow.contains("steps.packages.outputs.available == 'true'"));
         assert!(asset_name("unsupported-target").is_none());

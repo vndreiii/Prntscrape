@@ -87,7 +87,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: portable-${{ matrix.target }}
-          path: dist/*
+          path: |
+            dist/*.exe
+            dist/*.app.zip
           if-no-files-found: error
 
   build-linux:
@@ -116,7 +118,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs: [build, build-linux]
     if: always() && github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
@@ -152,7 +154,10 @@ jobs:
           mkdir -p release-assets
           cd release-assets
           shopt -s nullglob
-          files=(Prntscrape-*)
+          files=()
+          for package in Prntscrape-*; do
+            [[ -f "$package" ]] && files+=("$package")
+          done
           if [ ${#files[@]} -eq 0 ]; then
             echo "No build artifacts were downloaded; no release can be published."
             echo "available=false" >> "$GITHUB_OUTPUT"
