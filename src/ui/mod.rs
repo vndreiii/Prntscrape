@@ -28,13 +28,17 @@ use wry::{WebView, WebViewBuilder};
 #[derive(Debug)]
 pub(super) enum AppEvent {
     ShowSettings,
+    HideSettings,
     Quit,
     CaptureNow,
     PauseToggle,
     BrowseFolder,
     RefreshRunning,
     Ready,
-    Save(Config),
+    Save {
+        config: Config,
+        close_after_save: bool,
+    },
     Message(String),
     CheckUpdates,
     Update(UpdateStatus),
@@ -214,10 +218,14 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
             };
             let event = match msg["action"].as_str() {
                 Some("save") => match serde_json::from_value(msg["data"].clone()) {
-                    Ok(config) => AppEvent::Save(config),
+                    Ok(config) => AppEvent::Save {
+                        config,
+                        close_after_save: msg["close_after_save"].as_bool().unwrap_or(false),
+                    },
                     Err(error) => AppEvent::Message(format!("Invalid settings: {error}")),
                 },
                 Some("browse") => AppEvent::BrowseFolder,
+                Some("hide_settings") => AppEvent::HideSettings,
                 Some("capture_now") => AppEvent::CaptureNow,
                 Some("refresh_running") => AppEvent::RefreshRunning,
                 Some("request_config") => AppEvent::Ready,
@@ -319,6 +327,7 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
                     return;
                 }
             }
+            Event::UserEvent(AppEvent::HideSettings) => window.set_visible(false),
             Event::UserEvent(AppEvent::ShowSettings) => {
                 #[cfg(target_os = "windows")]
                 {
@@ -357,12 +366,19 @@ pub fn run(config: Arc<Mutex<Config>>, capture_now: Arc<AtomicBool>, smoke_test:
                 sync_config(&webview, &config, &pause, tray.as_ref());
                 send(&webview, "loadUpdate", &update_status);
             }
-            Event::UserEvent(AppEvent::Save(cfg)) => match persist(cfg, &config) {
+            Event::UserEvent(AppEvent::Save {
+                config: cfg,
+                close_after_save,
+            }) => match persist(cfg, &config) {
                 Ok(()) => {
                     sync_config(&webview, &config, &pause, tray.as_ref());
                     send(&webview, "showMessage", &"Settings saved");
+                    send(&webview, "saveFinished", &close_after_save);
                 }
-                Err(error) => send(&webview, "showMessage", &error),
+                Err(error) => {
+                    send(&webview, "showMessage", &error);
+                    send(&webview, "saveFinished", &false);
+                }
             },
             Event::UserEvent(AppEvent::Message(message)) => send(&webview, "showMessage", &message),
             Event::UserEvent(AppEvent::RefreshRunning) => {

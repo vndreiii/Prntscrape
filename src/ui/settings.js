@@ -8,6 +8,32 @@ function showMessage(message) {
   document.getElementById('save-status').textContent = message;
 }
 
+function saveFinished(closeAfterSave) {
+  const button = document.getElementById('save-settings');
+  button.textContent = closeAfterSave ? 'Saved!' : 'Save Settings';
+  if (closeAfterSave) {
+    // Let the success feedback paint before hiding the native settings window.
+    setTimeout(() => {
+      sendIpc('hide_settings', {});
+      button.disabled = false;
+      button.textContent = 'Save Settings';
+    }, 220);
+  } else {
+    button.disabled = false;
+  }
+}
+
+// Delegation covers dynamically created running-app and watchlist buttons too.
+document.addEventListener('click', event => {
+  const control = event.target.closest('button, .seg label, .pills label');
+  if (!control || control.disabled || !control.animate ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  control.animate([
+    { transform: 'scale(.96)', filter: 'brightness(.92)' },
+    { transform: 'scale(1)', filter: 'brightness(1)' },
+  ], { duration: 180, easing: 'ease-out' });
+}, true);
+
 function loadUpdate(status) {
   document.getElementById('update-status').textContent = status.message;
   document.getElementById('check-updates').disabled = ['checking', 'downloading', 'installing', 'updated'].includes(status.phase);
@@ -83,6 +109,7 @@ function renderRunningApps() {
     btn.style.cursor = alreadyAdded ? 'default' : 'pointer';
     btn.style.opacity = alreadyAdded ? '0.6' : '1';
     btn.textContent = app.name;
+    btn.disabled = alreadyAdded;
     if (!alreadyAdded) {
       btn.onclick = () => addRunningApp(app.name);
     }
@@ -232,7 +259,7 @@ function getData() {
   };
 }
 
-function save() { 
+function save(closeAfterSave = false) {
   if (loading) return;
   const interval = document.getElementById('iv-custom');
   if (!interval.value || !interval.reportValidity()) return;
@@ -240,7 +267,14 @@ function save() {
     showMessage('Choose a save folder.');
     return;
   }
-  sendIpc('save', { data: getData() }); 
+  // Change listeners pass an Event, so only the button's explicit true closes.
+  if (closeAfterSave === true) {
+    const button = document.getElementById('save-settings');
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    showMessage('Saving settings…');
+  }
+  sendIpc('save', { data: getData(), close_after_save: closeAfterSave === true });
 }
 function setSaveDir(p) { 
   const sd = document.getElementById('savedir');
